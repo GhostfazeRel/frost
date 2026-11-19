@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Windows;
 using System.Windows.Interop;
 
@@ -77,6 +78,21 @@ public static class ShellActions
     {
         try { ContextMenuHost.Show(Hwnd(owner), folder, paths, (int)screenPoint.X, (int)screenPoint.Y); }
         catch { }
+    }
+
+    /// <summary>Writes a .lnk at <paramref name="lnkPath"/> pointing to <paramref name="target"/>.</summary>
+    public static void CreateShortcut(string lnkPath, string target, string description)
+    {
+        var link = (IShellLinkW)new ShellLinkCoClass();
+        try
+        {
+            Marshal.ThrowExceptionForHR(link.SetPath(target));
+            link.SetWorkingDirectory(Path.GetDirectoryName(target)!);
+            link.SetIconLocation(target, 0);
+            link.SetDescription(description);
+            ((IPersistFile)link).Save(lnkPath, true);
+        }
+        finally { Marshal.ReleaseComObject(link); }
     }
 }
 

@@ -26,6 +26,13 @@ public class PureTests
         Assert.Equal(-expected, Sign(C.Compare(b, a)));
     }
 
+    [Theory]
+    [InlineData("C:\"", "C:\\")]
+    [InlineData("d:", "d:\\")]
+    [InlineData(@"C:\Users\Bob", @"C:\Users\Bob")]
+    [InlineData("::{645FF040-5081-101B-9F08-00AA002F954E}", "::{645FF040-5081-101B-9F08-00AA002F954E}")]
+    public void FromShellArg(string arg, string expected) => Assert.Equal(expected, PathUtil.FromShellArg(arg));
+
     [Fact]
     public void NaturalNulls()
     {

@@ -70,6 +70,18 @@ public partial class MainWindow : Window
     {
         _vm.Start(App.StartPath);
         UpdateTabWidth();
+        if (Installer.IsInstalled && !_vm.Settings.AskedDefault && !DefaultFileManager.IsEnabled())
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, AskDefault);
+    }
+
+    private void AskDefault()
+    {
+        _vm.Settings.AskedDefault = true;
+        SettingsStore.Save(_vm.Settings);
+        if (DialogWindow.Show(this, "Make Frost your default file manager?",
+                "Folders, drives and Win+E will open in Frost. You can undo this anytime from the \u2026 menu.",
+                new[] { "Yes", "Not now" }, null, out _) == 0)
+            _vm.SetDefaultFileManager(true);
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

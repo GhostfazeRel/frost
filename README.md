@@ -5,16 +5,30 @@ preview pane, recursive search, and Explorer-compatible copy/paste, drag and dro
 
 > **Early preview:** not yet tested on real Windows. Bug reports welcome (Issues, attach `%AppData%\Frost\crash.log`).
 
-## Download
-Get `Frost.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest).
-Single self-contained exe: no install, no .NET needed. Requires Windows 10/11 x64 (the acrylic glass effect needs Windows 11).
+## Install
+Download `Frost-Setup-0.2.0.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest) and run it.
+It installs just for you into `%LocalAppData%\Programs\Frost` (no admin rights, no .NET needed), adds a Start menu shortcut
+and an entry in Settings > Apps. "Run without installing" starts Frost straight from the setup file.
+Requires Windows 10/11 x64 (the acrylic glass effect needs Windows 11).
 Windows SmartScreen will warn (unsigned): More info -> Run anyway.
-Crashes are logged to `%AppData%\Frost\crash.log`; settings in `%AppData%\Frost\settings.json`.
+Crashes are logged to `%AppData%\Frost\crash.log`; settings in `%AppData%\Frost\settings.json` (kept when you uninstall).
+
+Uninstall: Settings > Apps > Frost > Uninstall.
+
+## Default file manager
+Windows has no official switch for this, so Frost uses the same per-user trick as the Files app. When you opt in
+(setup checkbox, the first-run question, or "…" menu > "Make Frost the default file manager"), Frost adds an
+"Open in Frost" verb as the default for folders and drives and takes over Win+E / This PC, all under
+`HKCU\Software\Classes` (nothing machine-wide). Special places like Recycle Bin and Control Panel still open in Explorer.
+
+To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both remove only the keys Frost added.
 
 ## Build
     dotnet build Frost.slnx
     dotnet test tests/Frost.Core.Tests
     dotnet publish src/Frost.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist
+
+The release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-0.2.0.exe` (a file name containing "setup", or the `--install` argument, starts the installer).
 
 ## Layout
 - `src/Frost.Core` – listing, sorting, search, copy/move/delete (cross-platform, unit tested)
@@ -38,3 +52,7 @@ Shift+Del delete permanently · Alt+P preview pane · Ctrl+wheel icon size · F5
 9. Search: type to filter, Enter for recursive search, Esc to cancel.
 10. Sidebar: quick access, pin a folder, drives with usage bars; preview pane (Alt+P) for an image, a .txt and a folder.
 11. Close and reopen: tabs, window size and view restored.
+12. Install: run `Frost-Setup-0.2.0.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
+13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer.
+14. "Restore Explorer as default" in the … menu -> folders, drives and Win+E open in Explorer again.
+15. Uninstall from Settings > Apps -> confirm dialog; shortcuts, the Apps entry and the install folder are gone, Explorer is the default again, `%AppData%\Frost` is still there.

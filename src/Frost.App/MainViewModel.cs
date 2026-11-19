@@ -252,6 +252,21 @@ public sealed class MainViewModel : ObservableObject
         _noticeTimer.Stop(); _noticeTimer.Start();
     }
 
+    public void SetDefaultFileManager(bool enable)
+    {
+        try
+        {
+            if (enable) DefaultFileManager.Enable(Environment.ProcessPath ?? throw new InvalidOperationException("Can't find Frost's own file."));
+            else DefaultFileManager.Disable();
+            Notify(enable ? "Frost now opens folders, drives and Win+E." : "Explorer is the default file manager again.");
+        }
+        catch (Exception ex)
+        {
+            DefaultFileManager.Disable();
+            Notify("Couldn't make Frost the default: " + ex.Message);
+        }
+    }
+
     private void ClearNotice(object? s, EventArgs e) { Notice = ""; _noticeTimer?.Stop(); }
 
     // ---- preview ----

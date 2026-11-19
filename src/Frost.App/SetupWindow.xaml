@@ -1,0 +1,29 @@
+<Window x:Class="Frost.App.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" WindowStartupLocation="CenterScreen"
+        FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{StaticResource TextBrush}">
+    <Border Margin="24" Padding="24,22" Width="480" CornerRadius="20"
+            Background="{StaticResource MenuBgBrush}" BorderBrush="{StaticResource RimBrush}" BorderThickness="1"
+            MouseLeftButtonDown="Drag_Down">
+        <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.5" Color="Black"/></Border.Effect>
+        <StackPanel>
+            <TextBlock x:Name="TitleText" FontSize="17" FontWeight="SemiBold"/>
+            <TextBlock Margin="0,10,0,6" Text="Install to (just for you, no admin needed):" Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBox x:Name="PathBox" IsReadOnly="True" AutomationProperties.Name="Install folder"/>
+            <CheckBox x:Name="StartMenuCheck" Margin="0,16,0,0" IsChecked="True" Content="Start menu shortcut"/>
+            <CheckBox x:Name="DesktopCheck" Margin="0,10,0,0" Content="Desktop shortcut"/>
+            <CheckBox x:Name="DefaultCheck" Margin="0,10,0,0"
+                      AutomationProperties.Name="Make Frost my default file manager (opens folders, drives and Win+E in Frost; you can undo this anytime)">
+                <TextBlock TextWrapping="Wrap" MaxWidth="400" Text="Make Frost my default file manager (opens folders, drives and Win+E in Frost; you can undo this anytime)"/>
+            </CheckBox>
+            <CheckBox x:Name="LaunchCheck" Margin="0,10,0,0" IsChecked="True" Content="Launch Frost when done"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+                <Button Content="Install" MinWidth="84" Style="{StaticResource AccentPill}" IsDefault="True" Click="Install_Click"/>
+                <Button Content="Run without installing" Margin="8,0,0,0" Style="{StaticResource PillButton}" Click="Run_Click"/>
+                <Button Content="Cancel" MinWidth="84" Margin="8,0,0,0" Style="{StaticResource PillButton}" IsCancel="True"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

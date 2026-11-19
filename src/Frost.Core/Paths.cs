@@ -96,6 +96,13 @@ public static class PathUtil
         }
     }
 
+    /// <summary>Repairs a path Windows passed as "%1": a drive root arrives as <c>C:"</c> because <c>"C:\"</c> escapes the closing quote.</summary>
+    public static string FromShellArg(string arg)
+    {
+        var a = arg.TrimEnd('"');
+        return a.Length == 2 && char.IsAsciiLetter(a[0]) && a[1] == ':' ? a + "\\" : a;
+    }
+
     /// <summary>True if the name is valid for a Windows file/folder (no \/:*?"<>|, not reserved like CON/NUL, no trailing dot/space, not empty).</summary>
     public static bool IsValidFileName(string name)
     {

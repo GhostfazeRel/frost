@@ -23,6 +23,7 @@ public sealed class AppSettings
     public List<string> OpenTabs { get; set; } = new();
     public int ActiveTab { get; set; }
     public List<string> CollapsedSections { get; set; } = new();
+    public bool AskedDefault { get; set; }
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

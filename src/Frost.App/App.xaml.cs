@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
+using Frost.Core;
 
 namespace Frost.App;
 
@@ -9,10 +11,40 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        if (e.Args.Length > 0 && Directory.Exists(e.Args[0])) StartPath = e.Args[0];
         if (!SystemParameters.ClientAreaAnimation) Resources["HoverDur"] = new Duration(TimeSpan.Zero);
         DispatcherUnhandledException += OnUnhandled;
         base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown; // dialogs shown before the main window must not end the app
+
+        var args = e.Args;
+        if (args.Contains("--uninstall", StringComparer.OrdinalIgnoreCase))
+        {
+            if (DialogWindow.Show(null, "Uninstall Frost?", @"Your settings in %AppData%\Frost are kept.", new[] { "Uninstall", "Cancel" }, null, out _) == 0)
+                Installer.Uninstall();
+            Shutdown();
+            return;
+        }
+        if (Installer.IsSetupMode(args))
+        {
+            if (new SetupWindow().ShowDialog() != true) { Shutdown(); return; }
+        }
+        else if (args.Length > 0)
+        {
+            var path = PathUtil.FromShellArg(args[0]);
+            if (Directory.Exists(path)) StartPath = path;
+            else
+            {
+                // e.g. ::{CLSID} (Recycle Bin, Control Panel) sent to us while Frost is the default: let Explorer show it.
+                try { Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { path } }); } catch { }
+                Shutdown();
+                return;
+            }
+        }
+
+        var main = new MainWindow();
+        MainWindow = main;
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        main.Show();
     }
 
     private static void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)

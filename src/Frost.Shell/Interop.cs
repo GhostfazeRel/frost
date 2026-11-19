@@ -81,6 +81,7 @@ internal static class Native
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern bool ShellExecuteEx(ref SHELLEXECUTEINFO info);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SHFileOperation(ref SHFILEOPSTRUCT op);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SHOpenWithDialog(IntPtr hwnd, ref OPENASINFO info);
+    [DllImport("shell32.dll")] public static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
 
     [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr CreatePopupMenu();
@@ -160,4 +161,31 @@ internal interface IImageList
     [PreserveSig] int Draw(IntPtr pimldp);
     [PreserveSig] int Remove(int i);
     [PreserveSig] int GetIcon(int i, uint flags, out IntPtr picon);
+}
+
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+internal class ShellLinkCoClass { }
+
+// Only the setters are used; the getters keep their vtable slots with IntPtr placeholders.
+[ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IShellLinkW
+{
+    [PreserveSig] int GetPath(IntPtr pszFile, int cch, IntPtr pfd, uint flags);
+    [PreserveSig] int GetIDList(out IntPtr ppidl);
+    [PreserveSig] int SetIDList(IntPtr pidl);
+    [PreserveSig] int GetDescription(IntPtr pszName, int cch);
+    [PreserveSig] int SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+    [PreserveSig] int GetWorkingDirectory(IntPtr pszDir, int cch);
+    [PreserveSig] int SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+    [PreserveSig] int GetArguments(IntPtr pszArgs, int cch);
+    [PreserveSig] int SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+    [PreserveSig] int GetHotkey(out ushort hotkey);
+    [PreserveSig] int SetHotkey(ushort hotkey);
+    [PreserveSig] int GetShowCmd(out int showCmd);
+    [PreserveSig] int SetShowCmd(int showCmd);
+    [PreserveSig] int GetIconLocation(IntPtr pszIconPath, int cch, out int iIcon);
+    [PreserveSig] int SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int iIcon);
+    [PreserveSig] int SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pathRel, uint reserved);
+    [PreserveSig] int Resolve(IntPtr hwnd, uint flags);
+    [PreserveSig] int SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
 }
