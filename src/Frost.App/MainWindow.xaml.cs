@@ -71,6 +71,7 @@ public partial class MainWindow : Window
     {
         _vm.Start(App.StartPath);
         UpdateTabWidth();
+        if (App.StartNotice != null) _vm.Notify(App.StartNotice);
         if (!Installer.IsInstalled) return; // portable copies only check for updates from the menu
         var ask = !_vm.Settings.AskedDefault && !DefaultFileManager.IsEnabled();
         var check = DateTime.UtcNow - _vm.Settings.LastUpdateCheck >= TimeSpan.FromHours(24);
@@ -350,6 +351,14 @@ public partial class MainWindow : Window
         m.Items.Add(new Separator());
         m.Items.Add(MI("Copy path", "", _vm.CopyPath, "Ctrl+Shift+C"));
         m.Items.Add(MI("Properties", "", () => _vm.Properties(_vm.CurrentTab?.Path), "Alt+Enter"));
+        m.Items.Add(new Separator());
+        var isDefault = DefaultFileManager.IsEnabled();
+        m.Items.Add(MI(isDefault ? "Restore Explorer as default" : "Make Frost the default file manager", "", () =>
+        {
+            if (!isDefault && !Installer.IsInstalled) _vm.Notify("Install Frost first (run Frost-Setup) to make it the default file manager.");
+            else _vm.SetDefaultFileManager(!isDefault);
+        }));
+        m.Items.Add(MI("Check for updates", "", () => CheckForUpdates(true)));
         ShowMenu(MoreButton, m);
     }
 

@@ -256,13 +256,14 @@ public sealed class MainViewModel : ObservableObject
     {
         try
         {
-            if (enable) DefaultFileManager.Enable(Environment.ProcessPath ?? throw new InvalidOperationException("Can't find Frost's own file."));
-            else DefaultFileManager.Disable();
+            // Always the installed exe: a portable/setup copy may be moved or deleted (and a "setup" name would open the installer).
+            if (enable) DefaultFileManager.Enable(Installer.Exe);
+            else DefaultFileManager.Disable(Installer.Exe);
             Notify(enable ? "Frost now opens folders, drives and Win+E." : "Explorer is the default file manager again.");
         }
         catch (Exception ex)
         {
-            DefaultFileManager.Disable();
+            DefaultFileManager.Disable(Installer.Exe);
             Notify("Couldn't make Frost the default: " + ex.Message);
         }
     }

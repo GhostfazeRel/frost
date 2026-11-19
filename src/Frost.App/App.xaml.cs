@@ -8,6 +8,8 @@ namespace Frost.App;
 public partial class App : Application
 {
     public static string? StartPath { get; private set; }
+    /// <summary>Shown by the main window once it is up (e.g. a start folder that couldn't be opened).</summary>
+    public static string? StartNotice { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,7 +21,16 @@ public partial class App : Application
         var args = e.Args;
         if (args.Contains("--uninstall", StringComparer.OrdinalIgnoreCase))
         {
-            if (DialogWindow.Show(null, "Uninstall Frost?", @"Your settings in %AppData%\Frost are kept.", new[] { "Uninstall", "Cancel" }, null, out _) == 0)
+            if (!Installer.IsInstalled && File.Exists(Installer.Exe))
+            {
+                // Only the installed copy may delete the install folder: hand over to it.
+                try { Process.Start(new ProcessStartInfo(Installer.Exe) { UseShellExecute = false, ArgumentList = { "--uninstall" } }); } catch { }
+                Shutdown();
+                return;
+            }
+            if (Installer.InstalledCopyRunning())
+                DialogWindow.Show(null, "Can't uninstall Frost", Installer.CloseFrostMessage, new[] { "OK" }, null, out _);
+            else if (DialogWindow.Show(null, "Uninstall Frost?", @"Your settings in %AppData%\Frost are kept.", new[] { "Uninstall", "Cancel" }, null, out _) == 0)
                 Installer.Uninstall();
             Shutdown();
             return;
@@ -33,15 +44,18 @@ public partial class App : Application
         else if (args.Length > 0)
         {
             var path = PathUtil.FromShellArg(args[0]);
-            if (Directory.Exists(path)) StartPath = path;
-            else
+            if (path.StartsWith("::", StringComparison.Ordinal) || path.StartsWith("shell:", StringComparison.OrdinalIgnoreCase))
             {
-                // e.g. ::{CLSID} (Recycle Bin, Control Panel) sent to us while Frost is the default: let Explorer show it.
+                // Recycle Bin, Control Panel... sent to us while Frost is the default: let Explorer show them.
+                // Only these: forwarding a real folder could bounce straight back to Frost (Explorer may use the Directory verb).
                 try { Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { path } }); } catch { }
                 Shutdown();
                 return;
             }
+            if (Directory.Exists(path)) StartPath = path;
+            else StartNotice = $"Couldn't open {path}";
         }
+        if (Installer.IsInstalled) Updater.DeleteOldDownloads();
 
         var main = new MainWindow();
         MainWindow = main;

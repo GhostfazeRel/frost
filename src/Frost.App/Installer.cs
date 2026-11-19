@@ -23,8 +23,25 @@ public static class Installer
     public static bool IsInstalled =>
         Environment.ProcessPath is { } p && string.Equals(Path.GetDirectoryName(p), Dir, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Throws with a user-facing message on failure.</summary>
-    public static void Install(bool startMenu, bool desktop, bool makeDefault)
+    public const string CloseFrostMessage = "Frost is running. Close every Frost window, then try again.";
+
+    /// <summary>True if a Frost started from the install folder is running (other than this process).</summary>
+    public static bool InstalledCopyRunning()
+    {
+        foreach (var p in Process.GetProcessesByName("Frost"))
+            using (p)
+                try
+                {
+                    if (p.Id != Environment.ProcessId && string.Equals(Path.GetDirectoryName(p.MainModule?.FileName), Dir, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                catch { } // no access to that process: not ours to worry about
+        return false;
+    }
+
+    /// <summary>Waits for --wait-pid, then copies this exe into the install dir. Slow: run off the UI thread.
+    /// Returns true if Frost was already installed. Throws with a user-facing message on failure.</summary>
+    public static bool CopySelf()
     {
         var self = Environment.ProcessPath ?? throw new InvalidOperationException("Can't find Frost's own file.");
         if (WaitPid is { } pid)
@@ -36,9 +53,15 @@ public static class Installer
             try { File.Copy(self, Exe, true); }
             catch (IOException ex) when ((ex.HResult & 0xFFFF) is 32 or 33) // sharing / lock violation
             {
-                throw new InvalidOperationException("Frost is running. Close every Frost window, then click Install again.");
+                throw new InvalidOperationException(CloseFrostMessage);
             }
         }
+        return upgrading;
+    }
+
+    /// <summary>Shortcuts, Apps entry, default hook. Throws with a user-facing message on failure.</summary>
+    public static void Register(bool upgrading, bool startMenu, bool desktop, bool makeDefault)
+    {
         // The boxes reflect the existing install, so unticked means "remove it".
         SetShortcut(StartMenuLink, startMenu, upgrading);
         SetShortcut(DesktopLink, desktop, upgrading);
@@ -59,9 +82,9 @@ public static class Installer
         if (makeDefault)
         {
             try { DefaultFileManager.Enable(Exe); }
-            catch { DefaultFileManager.Disable(); throw; } // never leave a half-written hook behind
+            catch { DefaultFileManager.Disable(Exe); throw; } // never leave a half-written hook behind
         }
-        else if (DefaultFileManager.IsEnabled()) DefaultFileManager.Disable();
+        else DefaultFileManager.Disable(Exe); // no-op unless our hook is there
 
         var s = SettingsStore.Load(); // the setup checkbox was the user's answer: no first-run prompt
         s.AskedDefault = true;
@@ -74,13 +97,13 @@ public static class Installer
         else if (upgrading && File.Exists(lnk)) File.Delete(lnk); // only ours to remove when the box showed it existing
     }
 
-    /// <summary>Removes everything Install created except %AppData%\Frost. Never throws.</summary>
+    /// <summary>Removes everything Install created except %AppData%\Frost. Never throws. Callers make sure no other installed Frost runs.</summary>
     public static void Uninstall()
     {
-        DefaultFileManager.Disable();
+        DefaultFileManager.Disable(Exe);
         foreach (var lnk in new[] { StartMenuLink, DesktopLink }) try { File.Delete(lnk); } catch { }
         try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
-        if (!Path.IsPathFullyQualified(Dir)) return; // never rmdir a relative path
+        if (!IsInstalled || !Path.IsPathFullyQualified(Dir)) return; // only the installed copy removes its own folder
         try
         {
             // Our exe is still running: let it exit first, then remove the folder.

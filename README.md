@@ -16,17 +16,19 @@ Crashes are logged to `%AppData%\Frost\crash.log`; settings in `%AppData%\Frost\
 Uninstall: Settings > Apps > Frost > Uninstall.
 
 ## Default file manager
-Windows has no official switch for this, so Frost uses the same per-user trick as the Files app. When you opt in
-(setup checkbox, the first-run question, or "…" menu > "Make Frost the default file manager"), Frost adds an
+Windows has no official switch for this, so Frost uses the same per-user trick as the Files app. It needs the installed
+Frost. When you opt in (setup checkbox, the first-run question, or "…" menu > "Make Frost the default file manager"), Frost adds an
 "Open in Frost" verb as the default for folders and drives and takes over Win+E / This PC, all under
 `HKCU\Software\Classes` (nothing machine-wide). Special places like Recycle Bin and Control Panel still open in Explorer.
 
-To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both remove only the keys Frost added.
+To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both remove only Frost's own entries and put back
+whatever another app (e.g. Files) had set before.
 
 ## Updates
 The installed Frost checks [GitHub releases](https://github.com/GhostfazeRel/frost/releases) at most once a day, in the background.
-When a newer version is out it asks first: "Download and install", "Skip this version" or "Later". The download is verified
-(SHA-256, when GitHub provides it) and the setup reopens with your current options. Check by hand anytime: "…" menu > "Check for updates"
+When a newer version is out it asks first: "Download and install", "Skip this version" or "Later". Downloads come only over HTTPS from
+github.com and are checked against GitHub's SHA-256 digest when the release has one (otherwise HTTPS is the only check).
+The setup then reopens with your current options. Check by hand anytime: "…" menu > "Check for updates"
 (the only way for copies run without installing).
 
 ## Build
@@ -59,7 +61,7 @@ Shift+Del delete permanently · Alt+P preview pane · Ctrl+wheel icon size · F5
 10. Sidebar: quick access, pin a folder, drives with usage bars; preview pane (Alt+P) for an image, a .txt and a folder.
 11. Close and reopen: tabs, window size and view restored.
 12. Install: run `Frost-Setup-0.2.0.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
-13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer.
+13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer. An offline `\\server\share` opens Frost with a "Couldn't open" notice (no Frost/Explorer loop). With Files app set as default first, enabling then restoring Frost gives Files back folders and Win+E.
 14. "Restore Explorer as default" in the … menu -> folders, drives and Win+E open in Explorer again.
 15. Uninstall from Settings > Apps -> confirm dialog; shortcuts, the Apps entry and the install folder are gone, Explorer is the default again, `%AppData%\Frost` is still there.
 16. Updates: with a newer `Frost-Setup-X.Y.Z.exe` release on GitHub, the installed Frost asks on start (once per 24 h); "Download and install" shows progress, Cancel stops it, then setup opens with your options pre-ticked and installs over the old copy. "Skip this version" stops the automatic prompt. "…" > "Check for updates" says "You're up to date" when it is.

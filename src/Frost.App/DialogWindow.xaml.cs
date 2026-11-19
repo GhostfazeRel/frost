@@ -53,6 +53,7 @@ public partial class DialogWindow : Window
         Exception? error = null;
         bool done = false;
         d.Closing += (_, e) => { if (!done) { cts.Cancel(); e.Cancel = true; } }; // close only once the work has stopped
+        d.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) cts.Cancel(); };
         d.Loaded += async (_, _) =>
         {
             try { await work(new Progress<double>(v => d.Progress.Value = v), cts.Token); }

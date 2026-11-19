@@ -43,7 +43,10 @@ public static class SettingsStore
             if (File.Exists(FilePath))
                 return JsonSerializer.Deserialize(File.ReadAllText(FilePath), SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
         }
-        catch { }
+        catch
+        {
+            try { File.Copy(FilePath, FilePath + ".bak", true); } catch { } // keep the unreadable file: the next Save overwrites it
+        }
         return new AppSettings();
     }
 

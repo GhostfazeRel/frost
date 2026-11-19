@@ -43,7 +43,7 @@ public static class Updater
             {
                 var name = a.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
                 if (!name.StartsWith("Frost-Setup-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!a.TryGetProperty("browser_download_url", out var u) || u.GetString() is not { } url) continue;
+                if (!a.TryGetProperty("browser_download_url", out var u) || u.GetString() is not { } url || !IsGitHubUrl(url)) continue;
                 var digest = a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null;
                 var sha = digest != null && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest[7..] : null;
                 var body = r.TryGetProperty("body", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString() ?? "" : "";
@@ -54,24 +54,39 @@ public static class Updater
         return best != null && UpdateVersion.IsNewer(best.Tag, Current) ? best : null;
     }
 
+    private static bool IsGitHubUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps &&
+        (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Removes setups left in %Temp% by earlier updates (a running one just stays). Never throws.</summary>
+    public static void DeleteOldDownloads()
+    {
+        try { foreach (var f in Directory.GetFiles(Path.GetTempPath(), "Frost-Setup-*.exe")) try { File.Delete(f); } catch { } }
+        catch { }
+    }
+
     /// <summary>Downloads the setup to %Temp%, verifying the SHA-256 digest when GitHub provides one. Deletes the file on any failure.</summary>
     public static async Task<string> DownloadAsync(UpdateInfo u, IProgress<double> progress, CancellationToken ct)
     {
         var file = Path.Combine(Path.GetTempPath(), $"Frost-Setup-{u.Version.ToString(3)}.exe");
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var stallAfter = TimeSpan.FromSeconds(30);
+        stall.CancelAfter(stallAfter);
         try
         {
-            using (var resp = await Http.GetAsync(u.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+            using (var resp = await Http.GetAsync(u.AssetUrl, HttpCompletionOption.ResponseHeadersRead, stall.Token))
             {
                 resp.EnsureSuccessStatusCode();
                 var total = resp.Content.Headers.ContentLength ?? 0;
-                using var src = await resp.Content.ReadAsStreamAsync(ct);
+                using var src = await resp.Content.ReadAsStreamAsync(stall.Token);
                 using var dst = File.Create(file);
                 using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
                 var buf = new byte[81920];
                 long done = 0;
                 int n;
-                while ((n = await src.ReadAsync(buf, ct)) > 0)
+                while ((n = await src.ReadAsync(buf, stall.Token)) > 0)
                 {
+                    stall.CancelAfter(stallAfter); // 30 s without a byte = stalled
                     await dst.WriteAsync(buf.AsMemory(0, n), ct);
                     sha.AppendData(buf, 0, n);
                     done += n;
@@ -82,9 +97,11 @@ public static class Updater
             }
             return file;
         }
-        catch
+        catch (Exception ex)
         {
             try { File.Delete(file); } catch { }
+            if (ex is OperationCanceledException && !ct.IsCancellationRequested)
+                throw new TimeoutException("The download stopped responding. Please try again later.");
             throw;
         }
     }
