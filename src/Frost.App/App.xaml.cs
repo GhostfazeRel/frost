@@ -26,6 +26,8 @@ public partial class App : Application
         }
         if (Installer.IsSetupMode(args))
         {
+            var w = Array.FindIndex(args, a => a.Equals("--wait-pid", StringComparison.OrdinalIgnoreCase));
+            if (w >= 0 && w + 1 < args.Length && int.TryParse(args[w + 1], out var pid)) Installer.WaitPid = pid;
             if (new SetupWindow().ShowDialog() != true) { Shutdown(); return; }
         }
         else if (args.Length > 0)

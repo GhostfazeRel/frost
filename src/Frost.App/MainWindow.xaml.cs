@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Automation;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -70,8 +71,46 @@ public partial class MainWindow : Window
     {
         _vm.Start(App.StartPath);
         UpdateTabWidth();
-        if (Installer.IsInstalled && !_vm.Settings.AskedDefault && !DefaultFileManager.IsEnabled())
-            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, AskDefault);
+        if (!Installer.IsInstalled) return; // portable copies only check for updates from the menu
+        var ask = !_vm.Settings.AskedDefault && !DefaultFileManager.IsEnabled();
+        var check = DateTime.UtcNow - _vm.Settings.LastUpdateCheck >= TimeSpan.FromHours(24);
+        if (ask || check)
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () => { if (ask) AskDefault(); if (check) CheckForUpdates(false); });
+    }
+
+    /// <summary>Manual checks ignore the 24 h limit and the skipped version, and report "up to date" / errors. Never throws.</summary>
+    private async void CheckForUpdates(bool manual)
+    {
+        var s = _vm.Settings;
+        try
+        {
+            if (!manual) { s.LastUpdateCheck = DateTime.UtcNow; SettingsStore.Save(s); }
+            var u = await Updater.CheckAsync();
+            if (u == null || (!manual && u.Tag == s.SkippedVersion))
+            {
+                if (manual) _vm.Notify("You're up to date.");
+                return;
+            }
+            var version = u.Version.ToString(3);
+            var body = u.Body.Length > 600 ? u.Body[..600].TrimEnd() + "\u2026" : u.Body;
+            var choice = DialogWindow.Show(this, $"Frost {version} is available (you have {Updater.Current.ToString(3)})", body,
+                new[] { "Download and install", "Skip this version", "Later" }, null, out _);
+            if (choice == 1) { s.SkippedVersion = u.Tag; SettingsStore.Save(s); }
+            if (choice != 0) return;
+
+            string? file = null;
+            var error = DialogWindow.RunWithProgress(this, $"Downloading Frost {version}", "The installer starts when the download is done.",
+                async (p, ct) => file = await Updater.DownloadAsync(u, p, ct));
+            if (error is OperationCanceledException) return;
+            if (error != null) { DialogWindow.Show(this, "Couldn't download the update", error.Message, new[] { "OK" }, null, out _); return; }
+
+            Process.Start(new ProcessStartInfo(file!) { UseShellExecute = false, ArgumentList = { "--install", "--wait-pid", Environment.ProcessId.ToString() } });
+            Close(); // saves settings and exits; setup waits for this process before copying
+        }
+        catch (Exception ex)
+        {
+            if (manual) _vm.Notify("Couldn't check for updates: " + ex.Message);
+        }
     }
 
     private void AskDefault()

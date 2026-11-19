@@ -23,6 +23,12 @@ Windows has no official switch for this, so Frost uses the same per-user trick a
 
 To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both remove only the keys Frost added.
 
+## Updates
+The installed Frost checks [GitHub releases](https://github.com/GhostfazeRel/frost/releases) at most once a day, in the background.
+When a newer version is out it asks first: "Download and install", "Skip this version" or "Later". The download is verified
+(SHA-256, when GitHub provides it) and the setup reopens with your current options. Check by hand anytime: "…" menu > "Check for updates"
+(the only way for copies run without installing).
+
 ## Build
     dotnet build Frost.slnx
     dotnet test tests/Frost.Core.Tests
@@ -56,3 +62,4 @@ Shift+Del delete permanently · Alt+P preview pane · Ctrl+wheel icon size · F5
 13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer.
 14. "Restore Explorer as default" in the … menu -> folders, drives and Win+E open in Explorer again.
 15. Uninstall from Settings > Apps -> confirm dialog; shortcuts, the Apps entry and the install folder are gone, Explorer is the default again, `%AppData%\Frost` is still there.
+16. Updates: with a newer `Frost-Setup-X.Y.Z.exe` release on GitHub, the installed Frost asks on start (once per 24 h); "Download and install" shows progress, Cancel stops it, then setup opens with your options pre-ticked and installs over the old copy. "Skip this version" stops the automatic prompt. "…" > "Check for updates" says "You're up to date" when it is.

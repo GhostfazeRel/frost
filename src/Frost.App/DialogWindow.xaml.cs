@@ -36,6 +36,34 @@ public partial class DialogWindow : Window
         return d._result;
     }
 
+    /// <summary>Runs <paramref name="work"/> behind a progress bar (0-100) with a Cancel button; Esc/close also cancel.
+    /// Returns null on success, the exception otherwise (OperationCanceledException when cancelled). Must run on the UI thread.</summary>
+    public static Exception? RunWithProgress(Window? owner, string title, string message, Func<IProgress<double>, CancellationToken, Task> work)
+    {
+        var d = new DialogWindow();
+        if (owner != null && owner.IsVisible) d.Owner = owner; else d.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        d.TitleText.Text = title;
+        d.MessageText.Text = message;
+        d.Progress.Visibility = Visibility.Visible;
+        d.Progress.Width = 330;
+        using var cts = new CancellationTokenSource();
+        var cancel = new Button { Content = "Cancel", MinWidth = 84, Style = (Style)Application.Current.FindResource("PillButton") }; // Esc is handled by Closing below
+        cancel.Click += (_, _) => cts.Cancel();
+        d.Buttons.Children.Add(cancel);
+        Exception? error = null;
+        bool done = false;
+        d.Closing += (_, e) => { if (!done) { cts.Cancel(); e.Cancel = true; } }; // close only once the work has stopped
+        d.Loaded += async (_, _) =>
+        {
+            try { await work(new Progress<double>(v => d.Progress.Value = v), cts.Token); }
+            catch (Exception ex) { error = ex; }
+            done = true;
+            d.Close();
+        };
+        d.ShowDialog();
+        return error;
+    }
+
     private void Drag_Down(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase) try { DragMove(); } catch { }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
+using Frost.Shell;
 
 namespace Frost.App;
 
@@ -12,6 +13,13 @@ public partial class SetupWindow : Window
         InitializeComponent();
         TitleText.Text = Title = $"Install Frost {Installer.Version}";
         PathBox.Text = Installer.Dir;
+        // Reinstall/update: show what is actually there now.
+        DefaultCheck.IsChecked = DefaultFileManager.IsEnabled();
+        if (File.Exists(Installer.Exe))
+        {
+            StartMenuCheck.IsChecked = File.Exists(Installer.StartMenuLink);
+            DesktopCheck.IsChecked = File.Exists(Installer.DesktopLink);
+        }
     }
 
     private void Install_Click(object sender, RoutedEventArgs e)

@@ -24,6 +24,8 @@ public sealed class AppSettings
     public int ActiveTab { get; set; }
     public List<string> CollapsedSections { get; set; } = new();
     public bool AskedDefault { get; set; }
+    public DateTime LastUpdateCheck { get; set; } // UTC
+    public string? SkippedVersion { get; set; }
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

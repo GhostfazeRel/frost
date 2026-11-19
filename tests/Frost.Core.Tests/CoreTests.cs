@@ -33,6 +33,24 @@ public class PureTests
     [InlineData("::{645FF040-5081-101B-9F08-00AA002F954E}", "::{645FF040-5081-101B-9F08-00AA002F954E}")]
     public void FromShellArg(string arg, string expected) => Assert.Equal(expected, PathUtil.FromShellArg(arg));
 
+    [Theory]
+    [InlineData("v0.3.0", true)]
+    [InlineData("0.3.0", true)]
+    [InlineData("V1.0.0", true)]
+    [InlineData("v0.10.0", true)]
+    [InlineData("v0.2.1", true)]
+    [InlineData("v0.2.0", false)]
+    [InlineData("v0.1.9", false)]
+    [InlineData("v0.2", false)]
+    [InlineData("v0.3.0-beta", false)]
+    [InlineData("latest", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void UpdateIsNewer(string? tag, bool expected) => Assert.Equal(expected, UpdateVersion.IsNewer(tag, new Version(0, 2, 0, 0)));
+
+    [Fact]
+    public void UpdateIsNewerComparesNumerically() => Assert.True(UpdateVersion.IsNewer("v0.10.0", new Version(0, 9, 0)));
+
     [Fact]
     public void NaturalNulls()
     {
