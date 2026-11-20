@@ -150,4 +150,15 @@ public class ArchivesTests : IDisposable
         Assert.Equal(1, skipped);
         Assert.Equal(new[] { "src/", "src/ok.txt" }, Archives.Describe(zip, 50).Names.Order().ToArray());
     }
+
+    [Fact]
+    public async Task Compress_DanglingTopLevelLink_Skipped()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        Make("ok.txt", "ok");
+        File.CreateSymbolicLink(Path.Combine(_d, "dead"), Path.Combine(_d, "nowhere"));
+        var zip = Path.Combine(_d, "t.zip");
+        Assert.Equal(1, await Archives.CompressAsync(new[] { Path.Combine(_d, "ok.txt"), Path.Combine(_d, "dead") }, zip, null, default));
+        Assert.Equal(new[] { "ok.txt" }, Archives.Describe(zip, 50).Names.ToArray());
+    }
 }

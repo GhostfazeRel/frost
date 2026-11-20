@@ -56,6 +56,7 @@ public static class Archives
                     }
             }
             else if (File.Exists(s)) { items.Add((s, name, false)); total += new FileInfo(s).Length; }
+            else if (new FileInfo(s).LinkTarget != null) skipped++; // dangling top-level link
             else throw new FileNotFoundException("Item not found.", s);
         }
 
@@ -136,6 +137,7 @@ public static class Archives
         try
         {
             Directory.CreateDirectory(root); created = true;
+            try { File.SetAttributes(root, FileAttributes.Hidden | FileAttributes.Directory); } catch { } // keep it out of listings/watchers
             var buf = new byte[BufferSize];
             foreach (var (e, full) in targets)
             {
@@ -160,7 +162,12 @@ public static class Archives
             progress?.Report(new OperationProgress("", total, total, count, files));
             for (int attempt = 0; ; attempt++)
             {
-                try { Directory.Move(root, final); created = false; return final; }
+                try
+                {
+                    Directory.Move(root, final); created = false;
+                    try { File.SetAttributes(final, File.GetAttributes(final) & ~FileAttributes.Hidden); } catch { }
+                    return final;
+                }
                 catch (IOException) when (attempt < 5 && (Directory.Exists(final) || File.Exists(final)))
                 { final = Path.Combine(parent, PathUtil.UniqueName(parent, Path.GetFileName(final))); }
             }
