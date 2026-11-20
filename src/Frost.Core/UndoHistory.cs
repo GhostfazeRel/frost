@@ -3,6 +3,8 @@ namespace Frost.Core;
 public abstract record UndoOp;
 // Print = fingerprints computed off the UI thread (see ItemPrint); a pending or failed one counts as unverifiable.
 public sealed record RenameOp(string From, string To, Task<string?[]> Print) : UndoOp;
+/// <summary>One batch rename: Print = fingerprints of the To paths, parallel to Pairs.</summary>
+public sealed record BatchRenameOp(IReadOnlyList<(string From, string To)> Pairs, Task<string?[]> Print) : UndoOp;
 public sealed record CreateOp(string Path, bool IsDirectory, Task<string?[]> Print) : UndoOp;
 public sealed record TransferOp(bool Move, IReadOnlyList<TransferredItem> Items, Task<string?[]>? Prints = null) : UndoOp;
 public sealed record RecycleOp(IReadOnlyList<string> Paths) : UndoOp;
@@ -72,6 +74,12 @@ public sealed class UndoHistory
 
     /// <summary>Call right AFTER renaming. The entry is recorded at once; the item is fingerprinted in the background.</summary>
     public void RecordRename(string from, string to) { if (from != to) Push(new RenameOp(from, to, PrintAsync(new[] { to }))); }
+    /// <summary>Call right AFTER a batch rename finished: one undoable entry for all pairs (full old/new paths).</summary>
+    public void RecordBatchRename(IEnumerable<(string From, string To)> pairs)
+    {
+        var list = pairs.Where(p => p.From != p.To).ToArray();
+        if (list.Length > 0) Push(new BatchRenameOp(list, PrintAsync(list.Select(p => p.To).ToArray())));
+    }
     /// <summary>Call right AFTER creating the (empty) item.</summary>
     public void RecordCreate(string path, bool isDirectory) => Push(new CreateOp(path, isDirectory, PrintAsync(new[] { path })));
     /// <summary>Call right AFTER the transfer finished (copies are fingerprinted in the background).</summary>
@@ -220,6 +228,25 @@ public sealed class UndoHistory
                 FileOperations.Rename(from, Path.GetFileName(to));
                 return new();
             }
+            case BatchRenameOp b:
+            {
+                var pairs = forward ? b.Pairs : b.Pairs.Select(p => (From: p.To, To: p.From)).ToList();
+                var froms = new HashSet<string>(pairs.Select(p => p.From), StringComparer.OrdinalIgnoreCase);
+                foreach (var (from, to) in pairs)
+                {
+                    if (!Exists(from)) return Gone($"\"{Path.GetFileName(from)}\" was deleted, moved or renamed outside Frost.");
+                    if (!froms.Contains(to) && Exists(to)) return new($"\"{Path.GetFileName(to)}\" already exists."); // a name another item is leaving is fine
+                }
+                if ((await ChangedAsync(pairs.Select(p => p.From).ToArray(), b.Print)).Any(x => x))
+                {
+                    var a = confirm("Some renamed items changed since the batch rename (they may be different items now). Rename them anyway?");
+                    if (a == null) throw new OperationCanceledException();
+                    if (a == false) return Gone("you chose to leave them as they are.");
+                }
+                // two-phase, all-or-nothing, so swaps work
+                BatchRename.Apply(pairs.Select(p => new BatchRenameItem(p.From, Path.GetFileName(p.To), null)).ToList());
+                return new();
+            }
             case CreateOp c:
                 if (forward)
                 {
@@ -316,6 +343,7 @@ public sealed class UndoHistory
         return op switch
         {
             RenameOp r => $"rename of \"{Path.GetFileName(r.To)}\"",
+            BatchRenameOp b => $"rename of {b.Pairs.Count} items",
             CreateOp c => $"creation of \"{Path.GetFileName(c.Path)}\"",
             TransferOp t => $"{(t.Move ? "move" : "copy")} of {Items(t.Items.Select(i => Path.GetFileName(i.Destination)).ToArray())}",
             RecycleOp d => $"delete of {Items(d.Paths.Select(Path.GetFileName).ToArray()!)}",

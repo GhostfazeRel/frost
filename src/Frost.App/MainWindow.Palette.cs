@@ -36,7 +36,7 @@ public partial class MainWindow
             new("Cut", "Ctrl+X", () => _vm.CopySelection(true)),
             new("Paste", "Ctrl+V", () => _vm.Paste()),
             new("Select all", "Ctrl+A", () => ActiveList.SelectAll()),
-            new("Rename", "F2", _vm.BeginRenameSelection),
+            new("Rename", "F2", RenameSelection),
             new("Delete", "Delete", () => _vm.Delete(false)),
             new("Delete permanently", "Shift+Delete", () => _vm.Delete(true)),
             new("Copy path", "Ctrl+Shift+C", _vm.CopyPath),
@@ -64,7 +64,12 @@ public partial class MainWindow
         };
         if (t != null && t.Selection.Any(i => i.IsDirectory))
             cmds.Add(new("Open selection in new tab", "", () => { foreach (var i in _vm.CurrentTab!.Selection.Where(i => i.IsDirectory).ToList()) _vm.OpenInNewTab(i.FullPath); }));
-        // integration: append Undo / Zip / Batch rename entries here
+        cmds.Add(new("Undo", "Ctrl+Z", () => _ = UndoAsync()));
+        cmds.Add(new("Redo", "Ctrl+Y", () => _ = RedoAsync()));
+        if (t != null && t.Selection.Count > 1) cmds.Add(new("Batch rename", "F2", RenameSelection));
+        if (t != null && t.Selection.Count > 0) cmds.Add(new("Compress to ZIP", "", CompressSelection));
+        if (t != null && t.Selection.Count == 1 && t.Selection[0].FullPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            cmds.Add(new("Extract here", "", () => ExtractZip(t.Selection[0], false)));
         return cmds;
     }
 

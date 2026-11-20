@@ -17,6 +17,7 @@ public partial class MainWindow
         var dlg = new BatchRenameWindow(paths) { Owner = this };
         dlg.ShowDialog();
         if (dlg.Applied.Count == 0) return;
+        _vm.History.RecordBatchRename(dlg.Applied);
         try { await t.RefreshAsync(); } catch (Exception ex) { _vm.Notify(ex.Message); }
         _vm.Notify($"Renamed {dlg.Applied.Count} items.");
     }
