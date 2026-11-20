@@ -22,6 +22,8 @@ public partial class BatchRenameWindow : Window
     private IReadOnlyList<BatchRenameItem> _plan = Array.Empty<BatchRenameItem>();
     private BatchCase _case;
     private bool _busy;
+    private CancellationTokenSource? _cts;
+    private readonly System.Windows.Threading.DispatcherTimer _debounce;
 
     public IReadOnlyList<(string Old, string New)> Applied { get; private set; } = Array.Empty<(string, string)>();
 
@@ -29,19 +31,25 @@ public partial class BatchRenameWindow : Window
     {
         _paths = paths;
         InitializeComponent();
+        _debounce = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        _debounce.Tick += (_, _) => Recompute();
+        Closing += (_, e) => { if (_busy) e.Cancel = true; else _cts?.Cancel(); }; // never close while files are being renamed
         TitleText.Text = $"Rename {paths.Count} items";
-        Loaded += (_, _) => { FindBox.Focus(); UpdatePreview(); };
+        Loaded += (_, _) => { FindBox.Focus(); Recompute(); };
     }
 
-    private BatchRenameOptions Options()
+    private bool TryOptions(out BatchRenameOptions o)
     {
-        static int Num(TextBox b, int fallback) => int.TryParse(b.Text.Trim(), out var v) ? v : fallback;
-        return new BatchRenameOptions
+        o = new();
+        if (!int.TryParse(StartBox.Text.Trim(), out var start) || !int.TryParse(StepBox.Text.Trim(), out var step)
+            || !int.TryParse(WidthBox.Text.Trim(), out var width) || width is < 1 or > 18) return false;
+        o = new BatchRenameOptions
         {
             Find = FindBox.Text, Replace = ReplaceBox.Text, UseRegex = RegexCheck.IsChecked == true, MatchCase = CaseCheck.IsChecked == true,
             Prefix = PrefixBox.Text, Suffix = SuffixBox.Text, IncludeExtension = ExtCheck.IsChecked == true,
-            Start = Num(StartBox, 1), Step = Num(StepBox, 1), Width = Num(WidthBox, 1), Case = _case
+            Start = start, Step = step, Width = width, Case = _case
         };
+        return true;
     }
 
     private void Changed(object sender, RoutedEventArgs e) { if (IsLoaded) UpdatePreview(); }
@@ -53,31 +61,55 @@ public partial class BatchRenameWindow : Window
         UpdatePreview();
     }
 
+    /// <summary>Debounced: the plan is computed off the UI thread ~150 ms after the last change; older runs are cancelled.</summary>
     private void UpdatePreview()
     {
-        _plan = BatchRename.Plan(_paths, Options());
-        Preview.ItemsSource = _plan.Select(p => new Row(p.OldName, p.NewName, p.Error, p.Error != null ? ErrorBrush : (Brush)FindResource("TextBrush"))).ToList();
-        int errors = _plan.Count(p => p.Error != null), changed = _plan.Count(p => p.NewName != p.OldName);
-        SummaryText.Text = errors > 0 ? $"{errors} problem(s): hover a red name for details." : $"{changed} of {_plan.Count} will be renamed.";
+        OkButton.IsEnabled = false; // never apply a stale preview
+        _debounce.Stop(); _debounce.Start();
+    }
+
+    private async void Recompute()
+    {
+        _debounce.Stop();
+        _cts?.Cancel();
+        if (!TryOptions(out var opts))
+        {
+            _plan = Array.Empty<BatchRenameItem>();
+            Preview.ItemsSource = null;
+            SummaryText.Text = "Start, step and digits (1-18) must be whole numbers.";
+            return;
+        }
+        var cts = _cts = new CancellationTokenSource();
+        IReadOnlyList<BatchRenameItem> plan;
+        try { plan = await Task.Run(() => BatchRename.Plan(_paths, opts, cts.Token), cts.Token); }
+        catch (OperationCanceledException) { return; } // a newer run is on its way
+        catch (Exception ex) { SummaryText.Text = "Couldn't build the preview: " + ex.Message; return; }
+        if (cts.IsCancellationRequested) return;
+        _plan = plan;
+        Preview.ItemsSource = plan.Select(p => new Row(p.OldName, p.NewName, p.Error, p.Error != null ? ErrorBrush : (Brush)FindResource("TextBrush"))).ToList();
+        int errors = plan.Count(p => p.Error != null), changed = plan.Count(p => p.NewName != p.OldName);
+        SummaryText.Text = errors > 0 ? $"{errors} problem(s): hover a red name for details." : $"{changed} of {plan.Count} will be renamed.";
         OkButton.IsEnabled = errors == 0 && changed > 0 && !_busy;
     }
 
     private async void Ok_Click(object sender, RoutedEventArgs e)
     {
-        if (!OkButton.IsEnabled) return;
-        _busy = true; OkButton.IsEnabled = false; ErrorText.Visibility = Visibility.Collapsed;
+        if (!OkButton.IsEnabled || _busy) return;
+        _busy = true; OkButton.IsEnabled = false; CancelButton.IsEnabled = false; ErrorText.Visibility = Visibility.Collapsed;
         var plan = _plan;
         try
         {
             Applied = await Task.Run(() => BatchRename.Apply(plan));
+            _busy = false; // closing is allowed again
             DialogResult = true;
         }
         catch (Exception ex)
         {
-            ErrorText.Text = "Nothing was renamed: " + ex.Message; // Apply rolls back on failure
-            ErrorText.Visibility = Visibility.Visible;
             _busy = false;
-            UpdatePreview();
+            CancelButton.IsEnabled = true;
+            ErrorText.Text = ex is BatchRenameRollbackException ? ex.Message : "Nothing was renamed (changes were rolled back): " + ex.Message;
+            ErrorText.Visibility = Visibility.Visible;
+            Recompute();
         }
     }
 

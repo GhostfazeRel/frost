@@ -147,3 +147,56 @@ public sealed class BatchRenameTests : IDisposable
         Assert.Equal(3, Directory.GetFileSystemEntries(_dir).Length);
     }
 }
+
+public sealed class BatchRenameSafetyTests : IDisposable
+{
+    private readonly string _dir = Directory.CreateTempSubdirectory("frost-br2-").FullName;
+    public void Dispose() => Directory.Delete(_dir, true);
+    private string P(string n) => Path.Combine(_dir, n);
+    private string[] Make(params string[] names) { foreach (var n in names) File.WriteAllText(P(n), n); return names.Select(P).ToArray(); }
+
+    [Fact] public void RollbackFailureIsReportedWithStrandedNames()
+    {
+        var f = Make("a.txt", "b.txt");
+        var plan = BatchRename.Plan(f, new() { Prefix = "x_" });
+        int steps = 0;
+        // After phase 1 (2 steps) and the first phase-2 rename, occupy a.txt and fail: rollback of a can't restore its name.
+        var ex = Assert.Throws<BatchRenameRollbackException>(() => BatchRename.Apply(plan, () =>
+        {
+            if (++steps == 3) { File.WriteAllText(P("a.txt"), "intruder"); throw new IOException("boom"); }
+        }));
+        Assert.Contains(".frost-rename-", ex.Message);
+        Assert.Contains("a.txt", ex.Message);
+        Assert.DoesNotContain("Nothing was renamed", ex.Message);
+        Assert.True(File.Exists(f[1])); // the other file was restored
+        Assert.Equal("intruder", File.ReadAllText(f[0]));
+    }
+    [Fact] public void RollbackAfterMidPhaseTwoFailureRestoresAll()
+    {
+        var f = Make("a.txt", "b.txt", "c.txt");
+        var plan = BatchRename.Plan(f, new() { Prefix = "x_" });
+        File.WriteAllText(P("x_c.txt"), "intruder");
+        Assert.ThrowsAny<IOException>(() => BatchRename.Apply(plan));
+        Assert.All(new[] { "a.txt", "b.txt", "c.txt" }, n => Assert.Equal(n, File.ReadAllText(P(n))));
+        Assert.Equal(4, Directory.GetFileSystemEntries(_dir).Length);
+    }
+    [Fact] public void SlowRegexFailsWholeBatchQuickly()
+    {
+        var f = Make(Enumerable.Range(0, 50).Select(i => new string('a', 40) + "!" + i + ".txt").ToArray());
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var p = BatchRename.Plan(f, new() { Find = "(a+)+$", UseRegex = true, Replace = "x" });
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.All(p, i => Assert.Contains("too slow", i.Error));
+    }
+    [Fact] public void NumberFollowsGivenOrderAndLiteralBraceNInNamesIsKept()
+    {
+        var f = Make("{n}a.txt", "b.txt");
+        var p = BatchRename.Plan(new[] { f[1], f[0] }, new() { Prefix = "{n}-" });
+        Assert.Equal(new[] { "1-b.txt", "2-{n}a.txt" }, p.Select(i => i.NewName));
+    }
+    [Fact] public void CancelledPlanThrows()
+    {
+        var cts = new CancellationTokenSource(); cts.Cancel();
+        Assert.Throws<OperationCanceledException>(() => BatchRename.Plan(Make("a.txt"), new(), cts.Token));
+    }
+}

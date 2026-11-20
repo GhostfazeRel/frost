@@ -29,7 +29,10 @@ public sealed record BatchRenameItem(string OldPath, string NewName, string? Err
 
 public static class BatchRename
 {
-    public static IReadOnlyList<BatchRenameItem> Plan(IReadOnlyList<string> paths, BatchRenameOptions o)
+    /// <summary>Computes new names without touching the disk except for one directory listing per folder involved.
+    /// A regex that times out (100 ms per match) fails the whole batch with "pattern too slow" instead of retrying per item.
+    /// Honors cancellation (OperationCanceledException).</summary>
+    public static IReadOnlyList<BatchRenameItem> Plan(IReadOnlyList<string> paths, BatchRenameOptions o, CancellationToken ct = default)
     {
         var src = paths.Select(Path.TrimEndingDirectorySeparator).ToArray();
         Regex? rx = null;
@@ -40,19 +43,35 @@ public static class BatchRename
             {
                 rx = new Regex(o.UseRegex ? o.Find : Regex.Escape(o.Find),
                     o.MatchCase ? RegexOptions.None : RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                    TimeSpan.FromSeconds(1));
+                    TimeSpan.FromMilliseconds(100));
             }
             catch (ArgumentException) { optionError = "Invalid regular expression."; }
+        }
+
+        // One listing per directory: name -> isDirectory.
+        var listings = new Dictionary<string, Dictionary<string, bool>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, bool> List(string dir)
+        {
+            if (listings.TryGetValue(dir, out var l)) return l;
+            l = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            try { foreach (var e in new DirectoryInfo(dir).EnumerateFileSystemInfos()) l[e.Name] = e is DirectoryInfo; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            return listings[dir] = l;
         }
 
         var names = new string[src.Length];
         var errors = new string?[src.Length];
         for (int i = 0; i < src.Length; i++)
         {
+            ct.ThrowIfCancellationRequested();
             string name = Path.GetFileName(src[i]);
             errors[i] = optionError;
-            try { names[i] = Transform(src[i], name, i, o, rx); }
-            catch (RegexMatchTimeoutException) { names[i] = name; errors[i] = "Regular expression took too long."; }
+            bool isDir = List(Path.GetDirectoryName(src[i]) ?? "").TryGetValue(name, out var d) && d;
+            try { names[i] = Transform(name, isDir, i, o, rx); }
+            catch (RegexMatchTimeoutException)
+            {
+                return src.Select(p => new BatchRenameItem(p, Path.GetFileName(p), "Pattern too slow; simplify the regular expression.")).ToList();
+            }
             catch (RegexParseException) { names[i] = name; errors[i] ??= "Invalid replacement."; }
         }
 
@@ -64,6 +83,7 @@ public static class BatchRename
         var result = new List<BatchRenameItem>(src.Length);
         for (int i = 0; i < src.Length; i++)
         {
+            ct.ThrowIfCancellationRequested();
             string? err = errors[i];
             if (err == null)
             {
@@ -74,7 +94,7 @@ public static class BatchRename
                         : "The name is reserved or ends with a dot or space.";
                 else if (counts[targets[i]] > 1) err = "Another item in this batch gets the same name.";
                 // exists on disk and isn't one of the items being renamed (those move away first; unchanged ones are caught above)
-                else if (!sources.Contains(targets[i]) && (File.Exists(targets[i]) || Directory.Exists(targets[i])))
+                else if (!sources.Contains(targets[i]) && List(Path.GetDirectoryName(targets[i]) ?? "").ContainsKey(names[i]))
                     err = "An item with this name already exists.";
             }
             result.Add(new BatchRenameItem(src[i], names[i], err));
@@ -82,19 +102,20 @@ public static class BatchRename
         return result;
     }
 
-    private static string Transform(string path, string name, int index, BatchRenameOptions o, Regex? rx)
+    private static string Transform(string name, bool isDir, int index, BatchRenameOptions o, Regex? rx)
     {
         string ext = "";
         string text = name;
-        if (!o.IncludeExtension && !Directory.Exists(path))
+        if (!o.IncludeExtension && !isDir)
         {
             ext = Path.GetExtension(name);
             text = name[..^ext.Length];
         }
-        if (rx != null) text = rx.Replace(text, o.UseRegex ? o.Replace : o.Replace.Replace("$", "$$"));
-        text = o.Prefix + text + o.Suffix;
-        long n = o.Start + (long)index * o.Step;
-        text = text.Replace("{n}", n.ToString("D" + Math.Clamp(o.Width, 1, 18), CultureInfo.InvariantCulture));
+        // {n} is substituted only in the user's own strings, never in the original file name.
+        string n = (o.Start + (long)index * o.Step).ToString("D" + Math.Clamp(o.Width, 1, 18), CultureInfo.InvariantCulture);
+        string Num(string s) => s.Replace("{n}", n);
+        if (rx != null) text = rx.Replace(text, o.UseRegex ? Num(o.Replace) : Num(o.Replace).Replace("$", "$$"));
+        text = Num(o.Prefix) + text + Num(o.Suffix);
         text = o.Case switch
         {
             BatchCase.Lower => text.ToLowerInvariant(),
@@ -106,9 +127,11 @@ public static class BatchRename
     }
 
     /// <summary>Renames every changed item in two phases (to temporary names, then to the final ones) so swaps and
-    /// case-only renames work. On any failure everything done so far is rolled back and the exception rethrown.
-    /// Returns the applied (old, new) full paths; unchanged items are skipped.</summary>
-    public static IReadOnlyList<(string Old, string New)> Apply(IReadOnlyList<BatchRenameItem> plan)
+    /// case-only renames work. On failure everything done so far is rolled back and the exception rethrown; if the
+    /// rollback itself fails, a <see cref="BatchRenameRollbackException"/> names every file left under a temp name.
+    /// Returns the applied (old, new) full paths; unchanged items are skipped.
+    /// <paramref name="afterStep"/> is a test seam, called after each successful rename.</summary>
+    public static IReadOnlyList<(string Old, string New)> Apply(IReadOnlyList<BatchRenameItem> plan, Action? afterStep = null)
     {
         var first = plan.FirstOrDefault(p => p.Error != null);
         if (first != null) throw new InvalidOperationException($"'{first.OldName}': {first.Error}");
@@ -123,6 +146,7 @@ public static class BatchRename
                 string tmp = FileOperations.Rename(p.OldPath, ".frost-rename-" + Guid.NewGuid().ToString("N"));
                 done.Add((p.OldPath, tmp));
                 temps.Add(tmp);
+                afterStep?.Invoke();
             }
             var applied = new List<(string, string)>();
             for (int i = 0; i < work.Count; i++)
@@ -130,16 +154,29 @@ public static class BatchRename
                 string final = FileOperations.Rename(temps[i], work[i].NewName);
                 done.Add((temps[i], final));
                 applied.Add((work[i].OldPath, final));
+                afterStep?.Invoke();
             }
             return applied;
         }
-        catch
+        catch (Exception cause)
         {
+            var stranded = new List<string>();
             for (int i = done.Count - 1; i >= 0; i--)
             {
-                try { FileOperations.Rename(done[i].To, Path.GetFileName(done[i].From)); } catch { /* best effort: keep rolling back the rest */ }
+                try { FileOperations.Rename(done[i].To, Path.GetFileName(done[i].From)); }
+                catch (Exception e)
+                {
+                    // Still sitting at done[i].To; if that is a temp name, tell the user how to restore it.
+                    stranded.Add($"'{done[i].To}' (should be '{done[i].From}': {e.Message})");
+                }
             }
-            throw;
+            if (stranded.Count == 0) throw;
+            throw new BatchRenameRollbackException(
+                $"Rename failed ({cause.Message}) and could not be fully undone. These items were left under other names: "
+                + string.Join("; ", stranded), cause);
         }
     }
 }
+
+/// <summary>Apply failed and the rollback failed too; the message lists each item and the name it was left under.</summary>
+public sealed class BatchRenameRollbackException(string message, Exception inner) : IOException(message, inner);
