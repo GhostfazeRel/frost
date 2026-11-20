@@ -23,8 +23,8 @@ public static class Archives
         => Path.Combine(parent, PathUtil.UniqueName(parent, Path.GetFileNameWithoutExtension(zipPath)));
 
     /// <summary>Creates destZipPath (must not exist) from files and folders (recursively, empty folders kept).
-    /// Progress in bytes. Cancel or failure deletes the partial zip. Directory reparse points (junctions/symlinked folders) are skipped to avoid loops and the count is returned;
-    /// file reparse points (symlinks, cloud placeholders) are read like normal files.</summary>
+    /// Progress in bytes. Cancel or failure deletes the partial zip. Directory reparse points (junctions/symlinked folders) are skipped to avoid loops and and dangling links are skipped; the count is returned.
+    /// File reparse points (symlinks, cloud placeholders) are read like normal files.</summary>
     public static async Task<int> CompressAsync(IReadOnlyList<string> paths, string destZipPath,
         IProgress<OperationProgress>? progress, CancellationToken ct)
     {
@@ -52,7 +52,7 @@ public static class Archives
                             if ((f.Attributes & FileAttributes.ReparsePoint) != 0) { skipped++; continue; }
                             items.Add((f.FullName, rel + "/", true)); stack.Push(f.FullName);
                         }
-                        else if (!string.Equals(f.FullName, destFull, StringComparison.OrdinalIgnoreCase)) { items.Add((f.FullName, rel, false)); total += ((FileInfo)f).Length; }
+                        else if (!string.Equals(f.FullName, destFull, StringComparison.OrdinalIgnoreCase)) { items.Add((f.FullName, rel, false)); try { total += ((FileInfo)f).Length; } catch (IOException) { } }
                     }
             }
             else if (File.Exists(s)) { items.Add((s, name, false)); total += new FileInfo(s).Length; }
@@ -85,9 +85,12 @@ public static class Archives
                         try { d.LastWriteTime = Directory.GetLastWriteTime(full); } catch { }
                         continue;
                     }
+                    FileStream src;
+                    try { src = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, BufferSize, true); }
+                    catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { skipped++; continue; } // dangling link
+                    using var _ = src;
                     var e = zip.CreateEntry(entryName, CompressionLevel.Optimal);
                     try { e.LastWriteTime = File.GetLastWriteTime(full); } catch { }
-                    using var src = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, BufferSize, true);
                     using var dst = e.Open();
                     int n;
                     while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
@@ -105,12 +108,15 @@ public static class Archives
     }
 
     /// <summary>Extracts into destDir, which must not exist yet (refuses otherwise, never merges). Any entry that would land
-    /// outside destDir throws InvalidDataException before anything is written. Cancel or failure removes destDir.</summary>
-    public static async Task ExtractAsync(string zipPath, string destDir,
+    /// outside destDir throws InvalidDataException before anything is written. Extracts into a hidden temp folder next to destDir
+    /// and moves it into place (next free name if destDir appeared meanwhile); returns the final path. Cancel or failure deletes only the temp folder.</summary>
+    public static async Task<string> ExtractAsync(string zipPath, string destDir,
         IProgress<OperationProgress>? progress, CancellationToken ct)
     {
         if (Directory.Exists(destDir) || File.Exists(destDir)) throw new IOException($"'{Path.GetFileName(destDir)}' already exists.");
-        string root = Path.GetFullPath(destDir);
+        string final = Path.GetFullPath(destDir);
+        string parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(final))!;
+        string root = Path.Combine(parent, ".frost-extract-" + Guid.NewGuid().ToString("N"));
         string rootSep = Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar;
         using var zip = ZipFile.OpenRead(zipPath);
 
@@ -126,10 +132,9 @@ public static class Archives
 
         long done = 0; int count = 0, files = targets.Count(t => !t.E.FullName.EndsWith('/') && !t.E.FullName.EndsWith('\\'));
         var sw = Stopwatch.StartNew(); long last = 0;
-        bool created = false; // only delete a folder this call created
+        bool created = false; // root is a fresh GUID name, so it is always ours
         try
         {
-            if (Directory.Exists(root) || File.Exists(root)) throw new IOException($"'{Path.GetFileName(destDir)}' already exists.");
             Directory.CreateDirectory(root); created = true;
             var buf = new byte[BufferSize];
             foreach (var (e, full) in targets)
@@ -153,6 +158,12 @@ public static class Archives
                 count++;
             }
             progress?.Report(new OperationProgress("", total, total, count, files));
+            for (int attempt = 0; ; attempt++)
+            {
+                try { Directory.Move(root, final); created = false; return final; }
+                catch (IOException) when (attempt < 5 && (Directory.Exists(final) || File.Exists(final)))
+                { final = Path.Combine(parent, PathUtil.UniqueName(parent, Path.GetFileName(final))); }
+            }
         }
         catch
         {

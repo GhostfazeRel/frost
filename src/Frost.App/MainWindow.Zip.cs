@@ -23,7 +23,7 @@ public partial class MainWindow
             parent = dlg.FolderName;
         }
         string dest = Archives.ExtractFolderFor(zipItem.FullPath, parent);
-        _ = RunArchiveOp("Extracting", dest, parent, async (p, ct) => { await Archives.ExtractAsync(zipItem.FullPath, dest, p, ct); return 0; });
+        _ = RunArchiveOp("Extracting", dest, parent, async (p, ct) => { dest = await Archives.ExtractAsync(zipItem.FullPath, dest, p, ct); return 0; });
     }
 
     // Runs in the operations panel with cancel; reselects the new zip/folder when its parent is open in a tab.
@@ -35,7 +35,7 @@ public partial class MainWindow
         try
         {
             int skipped = await Task.Run(() => work(progress, op.Cts.Token));
-            if (skipped > 0) _vm.Notify($"Done. Skipped {skipped} linked folder(s) (junctions/symlinks).");
+            if (skipped > 0) _vm.Notify($"Done. Skipped {skipped} linked folder(s) or broken link(s).");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { _vm.Notify(title + " failed: " + ex.Message); }

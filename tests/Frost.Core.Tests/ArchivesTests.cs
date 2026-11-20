@@ -126,4 +126,28 @@ public class ArchivesTests : IDisposable
         Assert.Contains("src/link.txt", names);
         Assert.DoesNotContain(names, n => n.StartsWith("src/dirlink"));
     }
+
+    [Fact]
+    public async Task Extract_MovesIntoPlace_NoTempLeft_ReturnsFinal()
+    {
+        Make("a.txt", "a");
+        var zip = Path.Combine(_d, "a.zip");
+        await Archives.CompressAsync(new[] { Path.Combine(_d, "a.txt") }, zip, null, default);
+        var dest = Path.Combine(_d, "ex");
+        Assert.Equal(dest, await Archives.ExtractAsync(zip, dest, null, default));
+        Assert.Equal("a", File.ReadAllText(Path.Combine(dest, "a.txt")));
+        Assert.DoesNotContain(Directory.GetDirectories(_d), d => Path.GetFileName(d).StartsWith(".frost-extract-"));
+    }
+
+    [Fact]
+    public async Task Compress_DanglingSymlink_Skipped()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        Make("src/ok.txt", "ok");
+        File.CreateSymbolicLink(Path.Combine(_d, "src/dead.txt"), Path.Combine(_d, "nowhere"));
+        var zip = Path.Combine(_d, "s.zip");
+        int skipped = await Archives.CompressAsync(new[] { Path.Combine(_d, "src") }, zip, null, default);
+        Assert.Equal(1, skipped);
+        Assert.Equal(new[] { "src/", "src/ok.txt" }, Archives.Describe(zip, 50).Names.Order().ToArray());
+    }
 }
