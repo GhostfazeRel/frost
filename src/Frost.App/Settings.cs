@@ -26,6 +26,7 @@ public sealed class AppSettings
     public bool AskedDefault { get; set; }
     public DateTime LastUpdateCheck { get; set; } // UTC
     public string? SkippedVersion { get; set; }
+    public List<string> RecentFolders { get; set; } = new(); // most recent first, max RecentList.Max
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]

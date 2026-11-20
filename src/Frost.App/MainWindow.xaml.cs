@@ -776,7 +776,9 @@ public partial class MainWindow : Window
         var t = _vm.CurrentTab;
         bool h = true;
 
-        if (ctrl && !alt && !shift && key == Key.T) _vm.NewTab();
+        if (ctrl && !alt && shift && key == Key.P) ShowCommandPalette();
+        else if (ctrl && !alt && !shift && key == Key.P) ShowGoToFolder();
+        else if (ctrl && !alt && !shift && key == Key.T) _vm.NewTab();
         else if (ctrl && !alt && shift && key == Key.T) _vm.ReopenClosedTab();
         else if (ctrl && !alt && !shift && key == Key.W) _vm.CloseTab(t);
         else if (ctrl && !alt && key == Key.Tab) _vm.CycleTab(shift ? -1 : 1);
