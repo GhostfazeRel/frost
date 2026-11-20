@@ -37,7 +37,7 @@ public partial class MainWindow
         {
             var (skipped, final) = await Task.Run(() => work(progress, op.Cts.Token));
             output = final;
-            _vm.History.RecordCreate(final, Directory.Exists(final));
+            _vm.History.RecordCreate(final, Directory.Exists(final), redoable: false);
             if (skipped > 0) _vm.Notify($"Done. Skipped {skipped} linked folder(s) or broken link(s).");
         }
         catch (OperationCanceledException) { }

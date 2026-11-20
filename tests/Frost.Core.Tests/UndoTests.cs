@@ -15,6 +15,18 @@ public sealed class UndoTests : IDisposable
     private static Task<UndoOutcome> Redo(UndoHistory h) => h.RedoAsync(Del, _ => false, null, default);
 
     [Fact]
+    public async Task Non_redoable_create_is_undo_only()
+    {
+        var h = new UndoHistory();
+        string f = Make("out.zip");
+        h.RecordCreate(f, false, redoable: false);
+        await h.FingerprintsReady;
+        Assert.True((await Undo(h)).Ok);
+        Assert.False(File.Exists(f));
+        Assert.False(h.CanRedo);
+    }
+
+    [Fact]
     public async Task Rename_undo_and_redo()
     {
         var h = new UndoHistory();

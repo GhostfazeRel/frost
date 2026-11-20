@@ -5,7 +5,7 @@ public abstract record UndoOp;
 public sealed record RenameOp(string From, string To, Task<string?[]> Print) : UndoOp;
 /// <summary>One batch rename: Print = fingerprints of the To paths, parallel to Pairs.</summary>
 public sealed record BatchRenameOp(IReadOnlyList<(string From, string To)> Pairs, Task<string?[]> Print) : UndoOp;
-public sealed record CreateOp(string Path, bool IsDirectory, Task<string?[]> Print) : UndoOp;
+public sealed record CreateOp(string Path, bool IsDirectory, Task<string?[]> Print, bool Redoable = true) : UndoOp;
 public sealed record TransferOp(bool Move, IReadOnlyList<TransferredItem> Items, Task<string?[]>? Prints = null) : UndoOp;
 public sealed record RecycleOp(IReadOnlyList<string> Paths) : UndoOp;
 
@@ -81,7 +81,7 @@ public sealed class UndoHistory
         if (list.Length > 0) Push(new BatchRenameOp(list, PrintAsync(list.Select(p => p.To).ToArray())));
     }
     /// <summary>Call right AFTER creating the (empty) item.</summary>
-    public void RecordCreate(string path, bool isDirectory) => Push(new CreateOp(path, isDirectory, PrintAsync(new[] { path })));
+    public void RecordCreate(string path, bool isDirectory, bool redoable = true) => Push(new CreateOp(path, isDirectory, PrintAsync(new[] { path }), redoable));
     /// <summary>Call right AFTER the transfer finished (copies are fingerprinted in the background).</summary>
     public void RecordTransfer(bool move, IEnumerable<TransferredItem> items)
     {
@@ -185,7 +185,7 @@ public sealed class UndoHistory
         if (step.Problem == null)
         {
             if (idx >= 0) from.RemoveAt(idx);
-            if (version == _version) AddTo(to, step.Done ?? op);
+            if (version == _version && op is not CreateOp { Redoable: false }) AddTo(to, step.Done ?? op); // archive output: redo would make an empty file/folder
             return new(true, $"{past} {what}" + (step.Note == null ? "" : ". " + step.Note));
         }
         if (step.Remainder == null) return new(false, $"Can't {verb} {what}: {step.Problem}"); // refused: entry stays, retry later
