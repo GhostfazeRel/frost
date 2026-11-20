@@ -73,6 +73,7 @@ public partial class MainWindow : Window
         List.SelectionChanged += (_, _) => OnSelectionChanged();
         List.DoubleTapped += (_, e) => { if (ItemAt(e.Source) is { } it) Open(it, e.KeyModifiers.HasFlag(KeyModifiers.Control)); };
         List.PointerPressed += List_PointerPressed;
+        SetUpDragDrop();
         List.PointerReleased += List_PointerReleased;
         List.PointerWheelChanged += (_, e) =>
         {
@@ -284,6 +285,7 @@ public partial class MainWindow : Window
         var geo = Glyphs.For(new FileEntry(name, path, true, 0, default, default, FileAttributes.Directory));
         var b = new Button { Classes = { "side" }, Tag = path, Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Glyph(geo.Geo, geo.Fill, 16), text } } };
         b.Click += (_, _) => { if (_ctrlDown) NewTab(path); else if (Directory.Exists(path)) _cur?.Navigate(path); else Notify($"Can't find \"{path}\"."); };
+        AcceptDrops(b, _ => Directory.Exists(path) ? path : null);
         b.PointerReleased += (_, e) =>
         {
             if (e.InitialPressMouseButton == MouseButton.Middle) NewTab(path, activate: false);
@@ -476,7 +478,7 @@ public partial class MainWindow : Window
             yield return new Separator();
             yield return MI("Cut", () => CopySelection(true), "Ctrl+X");
             yield return MI("Copy", () => CopySelection(false), "Ctrl+C");
-            if (one is { IsDirectory: true }) yield return MI("Paste into folder", () => Paste(one.FullPath), enabled: _clip.Count > 0);
+            if (one is { IsDirectory: true }) yield return MI("Paste into folder", () => Paste(one.FullPath));
             yield return MI("Copy path", CopyPath, "Ctrl+Shift+C");
             yield return MI(one != null ? "Rename" : "Rename…", RenameSelection, "F2");
             yield return MI("Move to trash", () => DeleteSelection(false), "Del");
@@ -493,7 +495,7 @@ public partial class MainWindow : Window
             yield return new Separator();
             yield return MI("New folder", NewFolder, "Ctrl+Shift+N");
             yield return MI("New text document", NewTextFile);
-            yield return MI("Paste", () => Paste(), "Ctrl+V", enabled: _clip.Count > 0);
+            yield return MI("Paste", () => Paste(), "Ctrl+V");
             yield return new Separator();
             yield return MI("Open in terminal", () => OpenTerminal(null));
             yield return MI("Refresh", Refresh, "F5");

@@ -146,6 +146,24 @@ public static class Platform
         return null;
     }
 
+    /// <summary>True when both paths are on the same mounted filesystem (a move there is a cheap rename).</summary>
+    public static bool SameDrive(string a, string b) => MountOf(a) == MountOf(b);
+
+    static string MountOf(string path)
+    {
+        var best = "/";
+        try
+        {
+            foreach (var l in File.ReadLines("/proc/mounts"))
+            {
+                var mp = l.Split(' ') is { Length: > 1 } f ? f[1].Replace("\\040", " ").Replace("\\011", "\t") : "/";
+                if (mp.Length > best.Length && (path == mp || path.StartsWith(mp.TrimEnd('/') + "/"))) best = mp;
+            }
+        }
+        catch { }
+        return best;
+    }
+
     static bool OnPath(string exe) => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':').Any(d => d.Length > 0 && File.Exists(Path.Combine(d, exe)));
 
     // ---- places ----

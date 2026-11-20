@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Frost.Core;
 namespace Frost.Linux;
@@ -38,7 +40,10 @@ sealed class Op
 public partial class MainWindow
 {
     readonly UndoHistory _history = new();
-    List<string> _clip = new(); // in-app clipboard (no cross-app file clipboard on Linux)
+    List<string> _clip = new(); // fallback when the system clipboard has no files
+    // What GNOME/KDE file managers put on the clipboard: "copy|cut\nfile:///…" and a plain URI list.
+    static readonly DataFormat<byte[]> GnomeFiles = DataFormat.CreateBytesPlatformFormat("x-special/gnome-copied-files");
+    static readonly DataFormat<byte[]> UriList = DataFormat.CreateBytesPlatformFormat("text/uri-list");
     bool _clipCut, _undoBusy;
     bool HistoryBusy => _undoBusy || Ops.Children.Count > 0; // undo/redo are off while a copy/move or another undo runs
 
@@ -50,8 +55,47 @@ public partial class MainWindow
         var p = Sel.Select(i => i.FullPath).ToList();
         if (p.Count == 0) return;
         (_clip, _clipCut) = (p, cut);
+        _ = ExportClipboard(p, cut);
         Notify(cut ? $"Cut {p.Count} item(s)" : $"Copied {p.Count} item(s)");
     }
+
+    async Task ExportClipboard(List<string> paths, bool cut)
+    {
+        if (Clipboard == null) return;
+        var uris = paths.Select(p => new Uri(p).AbsoluteUri).ToList();
+        var data = new DataTransfer();
+        data.Add(DataTransferItem.Create(GnomeFiles, System.Text.Encoding.UTF8.GetBytes((cut ? "cut\n" : "copy\n") + string.Join("\n", uris))));
+        data.Add(DataTransferItem.Create(UriList, System.Text.Encoding.UTF8.GetBytes(string.Join("\r\n", uris) + "\r\n")));
+        data.Add(DataTransferItem.Create(DataFormat.Text, string.Join("\n", paths)));
+        try { await Clipboard.SetDataAsync(data); } catch { } // the in-app copy still works
+    }
+
+    /// <summary>Files on the system clipboard (from Frost or another file manager), or null.</summary>
+    async Task<(List<string> Paths, bool Cut)?> ImportClipboard()
+    {
+        if (Clipboard == null) return null;
+        try
+        {
+            using var data = await Clipboard.TryGetDataAsync();
+            if (data == null) return null;
+            if (await data.TryGetValueAsync(GnomeFiles) is { } g)
+            {
+                var lines = System.Text.Encoding.UTF8.GetString(g).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var files = FromUris(lines.Skip(1));
+                if (lines.Length > 1 && files.Count > 0) return (files, lines[0] == "cut");
+            }
+            if (await data.TryGetValueAsync(UriList) is { } u)
+            {
+                var files = FromUris(System.Text.Encoding.UTF8.GetString(u).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(l => !l.StartsWith('#')));
+                if (files.Count > 0) return (files, false);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    static List<string> FromUris(IEnumerable<string> uris) =>
+        uris.Select(u => Uri.TryCreate(u, UriKind.Absolute, out var x) && x.IsFile ? x.LocalPath : null).OfType<string>().ToList();
 
     void CopyPath()
     {
@@ -62,13 +106,14 @@ public partial class MainWindow
         Notify("Path copied");
     }
 
-    void Paste(string? dest = null)
+    async void Paste(string? dest = null)
     {
         dest ??= _cur?.Path;
-        if (dest == null || _clip.Count == 0) return;
-        var (files, cut) = (_clip, _clipCut);
-        if (cut) _clip = new();
-        _ = TransferAsync(files, dest, cut);
+        if (dest == null) return;
+        var (files, cut) = await ImportClipboard() is { } sys ? sys : (_clip, _clipCut);
+        if (files.Count == 0) return;
+        if (cut) { _clip = new(); try { if (Clipboard != null) await Clipboard.ClearAsync(); } catch { } } // a cut pastes once
+        await TransferAsync(files, dest, cut);
     }
 
     // ================= transfers =================
@@ -319,5 +364,69 @@ public partial class MainWindow
             rows.AddRange(Fuzzy.Rank(list, q, x => x.Path).Select(r => new Dialogs.Row(r.Item.Path, r.Item.Kind, () => _cur?.Navigate(r.Item.Path), r.Match.Indices)));
             return rows;
         });
+    }
+}
+
+public partial class MainWindow
+{
+    // ================= drag and drop =================
+    // In-app paths travel in our own format; file lists from other apps arrive as DataFormats.Files.
+    public static readonly DataFormat<string> DragFormat = DataFormat.CreateStringApplicationFormat("x-frost-paths");
+    Point? _dragStart;
+
+    void SetUpDragDrop()
+    {
+        List.AddHandler(PointerPressedEvent, (_, e) =>
+            _dragStart = e.GetCurrentPoint(List).Properties.IsLeftButtonPressed && ItemAt(e.Source) != null ? e.GetPosition(List) : null,
+            Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        List.AddHandler(PointerMovedEvent, async (_, e) =>
+        {
+            if (_dragStart is not { } start || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed) return;
+            var d = e.GetPosition(List) - start;
+            if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
+            _dragStart = null;
+            var paths = Sel.Select(i => i.FullPath).ToList();
+            if (paths.Count == 0) return;
+            var data = new DataTransfer();
+            data.Add(DataTransferItem.Create(DragFormat, string.Join('\n', paths)));
+            data.Add(DataTransferItem.Create(DataFormat.Text, string.Join('\n', paths)));
+            await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Copy | DragDropEffects.Move);
+        }, handledEventsToo: true);
+        AcceptDrops(List, e => ItemAt(e.Source) is { IsDirectory: true } it ? it.FullPath : _cur is { SearchQuery: null } t ? t.Path : null);
+    }
+
+    void AcceptDrops(Control c, Func<DragEventArgs, string?> target)
+    {
+        DragDrop.SetAllowDrop(c, true);
+        c.AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            var dest = target(e);
+            var paths = DroppedPaths(e);
+            e.DragEffects = dest != null && paths.Count > 0 ? (MoveOnDrop(e, paths, dest) ? DragDropEffects.Move : DragDropEffects.Copy) : DragDropEffects.None;
+            e.Handled = true;
+        });
+        c.AddHandler(DragDrop.DropEvent, (_, e) =>
+        {
+            e.Handled = true;
+            if (target(e) is { } dest) DropInto(DroppedPaths(e), dest, MoveOnDrop(e, DroppedPaths(e), dest));
+        });
+    }
+
+    static List<string> DroppedPaths(DragEventArgs e)
+    {
+        if (e.DataTransfer.TryGetValue(DragFormat) is { } s) return s.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        return e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToList() ?? new();
+    }
+
+    // Like Explorer: Shift moves, Ctrl copies, otherwise move on the same drive and copy across drives.
+    static bool MoveOnDrop(DragEventArgs e, List<string> paths, string dest) =>
+        e.KeyModifiers.HasFlag(KeyModifiers.Shift) || (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && paths.All(p => Platform.SameDrive(p, dest)));
+
+    internal void DropInto(List<string> paths, string dest, bool move)
+    {
+        // Never drop a folder into itself or its own subfolder; moving into the folder it is already in does nothing.
+        var ok = paths.Where(p => !Platform.Same(p, dest) && !dest.StartsWith(p.TrimEnd('/') + "/") && !(move && Platform.Same(Path.GetDirectoryName(p), dest))).ToList();
+        if (ok.Count < paths.Count) Notify("Skipped items that are already there or would go into themselves.");
+        if (ok.Count > 0) _ = TransferAsync(ok, dest, move);
     }
 }

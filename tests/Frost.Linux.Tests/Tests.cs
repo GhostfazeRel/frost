@@ -86,10 +86,13 @@ public class PlatformTests
 
 public class WindowTests
 {
+    // Run the real dispatcher loop (not just RunJobs) so DispatcherTimers fire too.
+    static void Slice() => Dispatcher.UIThread.MainLoop(new CancellationTokenSource(20).Token);
+
     static void Pump(int ms = 400)
     {
         var end = DateTime.UtcNow.AddMilliseconds(ms);
-        while (DateTime.UtcNow < end) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(20); }
+        while (DateTime.UtcNow < end) Slice();
     }
 
     static (MainWindow w, string dir) Open()
