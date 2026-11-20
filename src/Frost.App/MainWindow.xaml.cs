@@ -345,6 +345,7 @@ public partial class MainWindow : Window
     private void More_Click(object s, RoutedEventArgs e)
     {
         var m = new ContextMenu();
+        AddUndoItems(m);
         m.Items.Add(MI("Show hidden items", "", () => _vm.ShowHidden = !_vm.ShowHidden, "Ctrl+H", true, _vm.ShowHidden));
         m.Items.Add(MI("Preview pane", "", () => _vm.PreviewPane = !_vm.PreviewPane, "Alt+P", true, _vm.PreviewPane));
         m.Items.Add(MI("Open terminal here", "", () => _vm.OpenTerminal()));
@@ -798,6 +799,8 @@ public partial class MainWindow : Window
         else if (ctrl && !alt && !shift && key == Key.C) _vm.CopySelection(false);
         else if (ctrl && !alt && !shift && key == Key.X) _vm.CopySelection(true);
         else if (ctrl && !alt && !shift && key == Key.V) _vm.Paste();
+        else if (ctrl && !alt && ((!shift && key == Key.Y) || (shift && key == Key.Z))) _ = RedoAsync();
+        else if (ctrl && !alt && !shift && key == Key.Z) _ = UndoAsync();
         else if (ctrl && !alt && shift && key == Key.C) _vm.CopyPath();
         else if (ctrl && !alt && !shift && key == Key.A) ActiveList.SelectAll();
         else if (!ctrl && !alt && key == Key.Delete) _vm.Delete(shift);

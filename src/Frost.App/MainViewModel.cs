@@ -31,6 +31,7 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public AppSettings Settings { get; }
+    public UndoHistory History { get; } = new();
     public Window? Owner { get; set; }
     public ObservableCollection<TabViewModel> Tabs { get; } = new();
     public ObservableCollection<OperationViewModel> Operations { get; } = new();
@@ -348,7 +349,7 @@ public sealed class MainViewModel : ObservableObject
                 if (DialogWindow.Show(Owner, "Delete permanently", msg, new[] { "Delete", "Cancel" }, null, out _) != 0) return;
                 await Task.Run(() => FileOperations.DeletePermanently(paths));
             }
-            else ShellActions.Recycle(paths, Owner);
+            else { ShellActions.Recycle(paths, Owner); History.RecordRecycle(paths.Where(x => !System.IO.File.Exists(x) && !System.IO.Directory.Exists(x))); }
         }
         catch (Exception ex) { Notify("Delete failed: " + ex.Message); }
         _ = t.RefreshAsync();
@@ -358,7 +359,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var t = CurrentTab;
         if (t == null || t.SearchQuery != null) return;
-        try { var p = FileOperations.CreateFolder(t.Path); await t.RefreshAsync(p); t.BeginRename(p); }
+        try { var p = FileOperations.CreateFolder(t.Path); History.RecordCreate(p, true); await t.RefreshAsync(p); t.BeginRename(p); }
         catch (Exception ex) { Notify("Couldn't create folder: " + ex.Message); }
     }
 
@@ -366,7 +367,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var t = CurrentTab;
         if (t == null || t.SearchQuery != null) return;
-        try { var p = FileOperations.CreateFile(t.Path, "New Text Document.txt"); await t.RefreshAsync(p); t.BeginRename(p); }
+        try { var p = FileOperations.CreateFile(t.Path, "New Text Document.txt"); History.RecordCreate(p, false); await t.RefreshAsync(p); t.BeginRename(p); }
         catch (Exception ex) { Notify("Couldn't create file: " + ex.Message); }
     }
 
@@ -389,7 +390,7 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
         it.IsRenaming = false;
-        try { var np = FileOperations.Rename(it.FullPath, name); if (t != null) await t.RefreshAsync(np); }
+        try { var np = FileOperations.Rename(it.FullPath, name); History.RecordRename(it.FullPath, np); if (t != null) await t.RefreshAsync(np); }
         catch (Exception ex) { Notify("Rename failed: " + ex.Message); }
         return true;
     }
@@ -417,6 +418,7 @@ public sealed class MainViewModel : ObservableObject
         Operations.Add(op);
         var progress = new Progress<OperationProgress>(op.Report);
         ConflictChoice? all = null;
+        var done = new List<TransferredItem>();
         ConflictChoice OnConflict(string target)
         {
             if (all != null) return all.Value;
@@ -430,12 +432,13 @@ public sealed class MainViewModel : ObservableObject
                 return c;
             });
         }
-        try { await FileOperations.TransferAsync(sources, dest, move, OnConflict, progress, op.Cts.Token); }
+        try { await FileOperations.TransferAsync(sources, dest, move, OnConflict, progress, op.Cts.Token, done); }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Notify((move ? "Move" : "Copy") + " failed: " + ex.Message); }
         finally
         {
             Operations.Remove(op);
+            History.RecordTransfer(move, done);
             foreach (var t in Tabs)
                 if (t.Loaded && (Paths.Same(t.Path, dest) || sources.Any(s => Paths.Same(System.IO.Path.GetDirectoryName(s), t.Path)))) _ = t.RefreshAsync();
         }
