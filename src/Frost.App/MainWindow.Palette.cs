@@ -18,6 +18,7 @@ public partial class MainWindow
         {
             new("New tab", "Ctrl+T", () => _vm.NewTab()),
             new("Close tab", "Ctrl+W", () => _vm.CloseTab(_vm.CurrentTab)),
+            new("Close other tabs", "", () => { var keep = _vm.CurrentTab; foreach (var x in _vm.Tabs.Where(x => x != keep).ToList()) _vm.CloseTab(x); }),
             new("Reopen closed tab", "Ctrl+Shift+T", _vm.ReopenClosedTab),
             new("Duplicate tab", "", () => _vm.DuplicateTab(_vm.CurrentTab)),
             new("Next tab", "Ctrl+Tab", () => _vm.CycleTab(1)),
@@ -61,6 +62,8 @@ public partial class MainWindow
             }),
             new("Check for updates", "", () => CheckForUpdates(true)),
         };
+        if (t != null && t.Selection.Any(i => i.IsDirectory))
+            cmds.Add(new("Open selection in new tab", "", () => { foreach (var i in _vm.CurrentTab!.Selection.Where(i => i.IsDirectory).ToList()) _vm.OpenInNewTab(i.FullPath); }));
         // integration: append Undo / Zip / Batch rename entries here
         return cmds;
     }
@@ -78,15 +81,36 @@ public partial class MainWindow
     private void ShowGoToFolder()
     {
         var places = GoToCandidates();
-        new PaletteWindow(this, "Go to folder (Ctrl+Enter: new tab)", q =>
+        var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        PaletteWindow? win = null;
+        win = new PaletteWindow(this, "Go to folder (Ctrl+Enter: new tab)", q =>
         {
-            var rows = new List<PaletteRow>();
+            lock (missing)
+                return Fuzzy.Rank(places.Where(p => !missing.Contains(p.Path)), q, p => p.Path).Take(60)
+                    .Select(r => new PaletteRow(new PaletteEntry(r.Item.Path, r.Item.Kind, ctrl => OpenFolder(r.Item.Path, ctrl)), r.Match)).ToList();
+        }, async q =>
+        {
             var typed = Environment.ExpandEnvironmentVariables(q.Trim().Trim('"'));
-            if (typed.Length > 0 && Path.IsPathRooted(typed) && Directory.Exists(typed))
-                rows.Add(new PaletteRow(new PaletteEntry("Go to " + typed, "", ctrl => OpenFolder(typed, ctrl)), new FuzzyMatch(0, Array.Empty<int>())));
-            rows.AddRange(Fuzzy.Rank(places, q, p => p.Path).Take(60).Select(r => new PaletteRow(new PaletteEntry(r.Item.Path, r.Item.Kind, ctrl => OpenFolder(r.Item.Path, ctrl)), r.Match)));
-            return rows;
-        }).Show();
+            if (typed.Length == 0 || !Path.IsPathRooted(typed) || !await Task.Run(() => Directory.Exists(typed))) return null;
+            return new PaletteRow(new PaletteEntry("Go to " + typed, "", ctrl => OpenFolder(typed, ctrl)), new FuzzyMatch(0, Array.Empty<int>()));
+        });
+        win.Show();
+        // Drop vanished local folders in the background; UNC and network-drive entries stay and are validated on Enter.
+        var check = places.Where(p => p.Kind is "Recent" or "Pinned" or "Quick access").Select(p => p.Path).ToList();
+        _ = Task.Run(() =>
+        {
+            foreach (var p in check)
+            {
+                try
+                {
+                    if (p.StartsWith(@"\\") || (p.Length >= 2 && p[1] == ':' && new DriveInfo(p[..1]).DriveType == DriveType.Network)) continue;
+                    if (!Directory.Exists(p)) lock (missing) missing.Add(p);
+                }
+                catch { }
+            }
+            bool any; lock (missing) any = missing.Count > 0;
+            if (any) win.Dispatcher.BeginInvoke(() => { if (win.IsVisible) win.Refresh(); });
+        });
     }
 
     private void OpenFolder(string path, bool newTab)
@@ -94,25 +118,22 @@ public partial class MainWindow
         if (newTab) _vm.NewTab(path); else _vm.CurrentTab?.Navigate(path);
     }
 
-    /// <summary>Recent, pinned, quick access, drives, then subfolders of the current folder; deduped, missing folders skipped.</summary>
+    /// <summary>Recent, pinned, quick access, drives, then subfolders of the current folder; deduped. No disk access here.</summary>
     private List<(string Path, string Kind)> GoToCandidates()
     {
         var list = new List<(string Path, string Kind)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        void Add(string? p, string kind, bool check = true)
+        void Add(string? p, string kind)
         {
             if (string.IsNullOrEmpty(p)) return;
-            var key = p.Length > 3 ? p.TrimEnd('\\', '/') : p;
-            if (seen.Contains(key)) return;
-            try { if (check && !Directory.Exists(p)) return; } catch { return; }
-            seen.Add(key); list.Add((p, kind));
+            if (seen.Add(p.Length > 3 ? p.TrimEnd('\\', '/') : p)) list.Add((p, kind));
         }
         foreach (var p in _vm.Settings.RecentFolders) Add(p, "Recent");
         foreach (var p in _vm.Settings.Pinned) Add(p, "Pinned");
         foreach (var i in _vm.Sections[0].Items) Add(i.Path, "Quick access");
-        foreach (var i in _vm.Sections[2].Items) Add(i.Path, "Drive", false);
+        foreach (var i in _vm.Sections[2].Items) Add(i.Path, "Drive");
         if (_vm.CurrentTab != null)
-            foreach (var i in _vm.CurrentTab.Items.Where(i => i.IsDirectory).Take(300)) Add(i.FullPath, "Subfolder", false);
+            foreach (var i in _vm.CurrentTab.Items.Where(i => i.IsDirectory).Take(300)) Add(i.FullPath, "Subfolder");
         return list;
     }
 }

@@ -128,6 +128,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var p = path != null && Directory.Exists(path) ? path : Paths.Home;
         var t = new TabViewModel(this, p);
+        RecentList.Add(Settings.RecentFolders, p);
         AddTab(t);
         if (activate) Activate(t);
     }

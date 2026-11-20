@@ -44,19 +44,31 @@ public sealed class HighlightBlock : TextBlock
 public partial class PaletteWindow : Window
 {
     private readonly Func<string, IReadOnlyList<PaletteRow>> _source;
+    private readonly Func<string, Task<PaletteRow?>>? _extra; // slow row (disk check) prepended when it finishes
+    private CancellationTokenSource? _cts;
 
-    public PaletteWindow(Window owner, string placeholder, Func<string, IReadOnlyList<PaletteRow>> source)
+    public PaletteWindow(Window owner, string placeholder, Func<string, IReadOnlyList<PaletteRow>> source, Func<string, Task<PaletteRow?>>? extra = null)
     {
         InitializeComponent();
         Owner = owner;
         _source = source;
+        _extra = extra;
         Hint.Text = placeholder;
-        Left = owner.Left + (owner.ActualWidth - Width) / 2;
-        Top = owner.Top + 60;
         Refresh();
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e) => Input.Focus();
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        // Owner.Left/Top are restore bounds when maximized: use the owner's real screen position (device px) converted at this window's DPI.
+        if (Owner.IsVisible && PresentationSource.FromVisual(this)?.CompositionTarget is { } ct)
+        {
+            var top = Owner.PointToScreen(new Point(Owner.ActualWidth / 2, 0));
+            var p = ct.TransformFromDevice.Transform(top);
+            Left = p.X - ActualWidth / 2;
+            Top = p.Y + 60;
+        }
+        Input.Focus();
+    }
     private void Window_Deactivated(object? sender, EventArgs e) { if (IsVisible) Close(); }
 
     private void Input_TextChanged(object sender, TextChangedEventArgs e)
@@ -65,13 +77,29 @@ public partial class PaletteWindow : Window
         Refresh();
     }
 
-    private void Refresh()
+    public void Refresh()
     {
-        var rows = _source(Input.Text);
+        var text = Input.Text;
+        var rows = _source(text);
         Results.ItemsSource = rows;
         Empty.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Results.Visibility = rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (rows.Count > 0) Results.SelectedIndex = 0;
+        _cts?.Cancel();
+        if (_extra == null) return;
+        var cts = _cts = new CancellationTokenSource();
+        _ = AddExtraAsync(text, rows, cts.Token);
+    }
+
+    private async Task AddExtraAsync(string text, IReadOnlyList<PaletteRow> rows, CancellationToken ct)
+    {
+        PaletteRow? row;
+        try { row = await _extra!(text); } catch { return; }
+        if (row == null || ct.IsCancellationRequested || !IsVisible) return;
+        var keepFirst = Results.SelectedIndex <= 0;
+        Results.ItemsSource = rows.Prepend(row).ToList();
+        Results.Visibility = Visibility.Visible; Empty.Visibility = Visibility.Collapsed;
+        if (keepFirst) Results.SelectedIndex = 0;
     }
 
     private void Move(int d)

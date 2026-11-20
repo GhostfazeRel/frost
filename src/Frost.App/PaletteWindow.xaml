@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Frost.App"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
-        SizeToContent="Height" Width="620" ShowInTaskbar="False" WindowStartupLocation="Manual"
+        SizeToContent="Height" Width="620" ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
         FontFamily="{StaticResource UiFont}" FontSize="14" Foreground="{StaticResource TextBrush}" Title="Frost"
         Deactivated="Window_Deactivated" PreviewKeyDown="Window_PreviewKeyDown" Loaded="Window_Loaded">
     <Border Margin="24" CornerRadius="18" Background="{StaticResource MenuBgBrush}" BorderBrush="{StaticResource RimBrush}" BorderThickness="1">
