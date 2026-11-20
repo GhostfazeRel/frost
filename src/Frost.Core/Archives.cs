@@ -23,29 +23,37 @@ public static class Archives
         => Path.Combine(parent, PathUtil.UniqueName(parent, Path.GetFileNameWithoutExtension(zipPath)));
 
     /// <summary>Creates destZipPath (must not exist) from files and folders (recursively, empty folders kept).
-    /// Progress in bytes. Cancel or failure deletes the partial zip. Directory reparse points are skipped.</summary>
-    public static async Task CompressAsync(IReadOnlyList<string> paths, string destZipPath,
+    /// Progress in bytes. Cancel or failure deletes the partial zip. Directory reparse points (junctions/symlinked folders) are skipped to avoid loops and the count is returned;
+    /// file reparse points (symlinks, cloud placeholders) are read like normal files.</summary>
+    public static async Task<int> CompressAsync(IReadOnlyList<string> paths, string destZipPath,
         IProgress<OperationProgress>? progress, CancellationToken ct)
     {
         var srcs = paths.Select(Path.TrimEndingDirectorySeparator).ToArray();
         // (full path, entry name, isDir)
         var items = new List<(string Full, string Entry, bool Dir)>();
         string destFull = Path.GetFullPath(destZipPath);
-        long total = 0;
+        long total = 0; int skipped = 0;
+        var opts = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0 };
         foreach (var s in srcs)
         {
             string name = Path.GetFileName(s);
             if (Directory.Exists(s))
             {
                 items.Add((s, name + "/", true));
-                var opts = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
-                foreach (var f in new DirectoryInfo(s).EnumerateFileSystemInfos("*", opts))
-                {
-                    ct.ThrowIfCancellationRequested();
-                    string rel = name + "/" + Path.GetRelativePath(s, f.FullName).Replace('\\', '/');
-                    if (f is DirectoryInfo) items.Add((f.FullName, rel + "/", true));
-                    else if (!string.Equals(f.FullName, destFull, StringComparison.OrdinalIgnoreCase)) { items.Add((f.FullName, rel, false)); total += ((FileInfo)f).Length; }
-                }
+                var stack = new Stack<string>();
+                stack.Push(s);
+                while (stack.Count > 0) // manual walk: never descend into directory reparse points
+                    foreach (var f in new DirectoryInfo(stack.Pop()).EnumerateFileSystemInfos("*", opts))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        string rel = name + "/" + Path.GetRelativePath(s, f.FullName).Replace('\\', '/');
+                        if (f is DirectoryInfo)
+                        {
+                            if ((f.Attributes & FileAttributes.ReparsePoint) != 0) { skipped++; continue; }
+                            items.Add((f.FullName, rel + "/", true)); stack.Push(f.FullName);
+                        }
+                        else if (!string.Equals(f.FullName, destFull, StringComparison.OrdinalIgnoreCase)) { items.Add((f.FullName, rel, false)); total += ((FileInfo)f).Length; }
+                    }
             }
             else if (File.Exists(s)) { items.Add((s, name, false)); total += new FileInfo(s).Length; }
             else throw new FileNotFoundException("Item not found.", s);
@@ -60,11 +68,13 @@ public static class Archives
             progress.Report(new OperationProgress(cur, done, total, count, files));
         }
 
+        bool created = false; // only delete what this call created (CreateNew fails if the file exists)
         try
         {
             using (var fs = new FileStream(destZipPath, FileMode.CreateNew, FileAccess.Write))
             using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
             {
+                created = true;
                 var buf = new byte[BufferSize];
                 foreach (var (full, entryName, isDir) in items)
                 {
@@ -89,8 +99,9 @@ public static class Archives
                 }
             }
             Report("", true);
+            return skipped;
         }
-        catch { TryDelete(destZipPath); throw; }
+        catch { if (created) TryDelete(destZipPath); throw; }
     }
 
     /// <summary>Extracts into destDir, which must not exist yet (refuses otherwise, never merges). Any entry that would land
@@ -115,9 +126,11 @@ public static class Archives
 
         long done = 0; int count = 0, files = targets.Count(t => !t.E.FullName.EndsWith('/') && !t.E.FullName.EndsWith('\\'));
         var sw = Stopwatch.StartNew(); long last = 0;
+        bool created = false; // only delete a folder this call created
         try
         {
-            Directory.CreateDirectory(root);
+            if (Directory.Exists(root) || File.Exists(root)) throw new IOException($"'{Path.GetFileName(destDir)}' already exists.");
+            Directory.CreateDirectory(root); created = true;
             var buf = new byte[BufferSize];
             foreach (var (e, full) in targets)
             {
@@ -143,7 +156,7 @@ public static class Archives
         }
         catch
         {
-            try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+            try { if (created && Directory.Exists(root)) Directory.Delete(root, true); } catch { }
             throw;
         }
     }

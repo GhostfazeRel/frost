@@ -90,4 +90,40 @@ public class ArchivesTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Archives.ExtractAsync(zip, dest, null, cts.Token));
         Assert.False(Directory.Exists(dest));
     }
+
+    [Fact]
+    public async Task Compress_ExistingZip_Survives()
+    {
+        Make("a.txt", "a");
+        var zip = Path.Combine(_d, "keep.zip");
+        File.WriteAllText(zip, "precious");
+        await Assert.ThrowsAsync<IOException>(() => Archives.CompressAsync(new[] { Path.Combine(_d, "a.txt") }, zip, null, default));
+        Assert.Equal("precious", File.ReadAllText(zip));
+    }
+
+    [Fact]
+    public async Task Extract_ExistingFolder_Survives()
+    {
+        Make("a.txt", "a");
+        var zip = Path.Combine(_d, "a.zip");
+        await Archives.CompressAsync(new[] { Path.Combine(_d, "a.txt") }, zip, null, default);
+        Make("ex/mine.txt", "mine");
+        await Assert.ThrowsAsync<IOException>(() => Archives.ExtractAsync(zip, Path.Combine(_d, "ex"), null, default));
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(_d, "ex/mine.txt")));
+    }
+
+    [Fact]
+    public async Task Compress_SkipsDirSymlink_KeepsFileSymlink()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        Make("src/real/x.txt", "x"); Make("other/o.txt", "o");
+        File.CreateSymbolicLink(Path.Combine(_d, "src/link.txt"), Path.Combine(_d, "other/o.txt"));
+        Directory.CreateSymbolicLink(Path.Combine(_d, "src/dirlink"), Path.Combine(_d, "other"));
+        var zip = Path.Combine(_d, "s.zip");
+        int skipped = await Archives.CompressAsync(new[] { Path.Combine(_d, "src") }, zip, null, default);
+        Assert.Equal(1, skipped);
+        var names = Archives.Describe(zip, 50).Names;
+        Assert.Contains("src/link.txt", names);
+        Assert.DoesNotContain(names, n => n.StartsWith("src/dirlink"));
+    }
 }
