@@ -7,6 +7,9 @@ public sealed record OperationProgress(string CurrentItem, long BytesDone, long 
 
 public enum ConflictChoice { Replace, Skip, KeepBoth }
 
+/// <summary>A top-level item a transfer created: where it came from and the exact path it ended up at.</summary>
+public sealed record TransferredItem(string Source, string Destination);
+
 public static class FileOperations
 {
     private const int BufferSize = 1 << 20;
@@ -55,9 +58,12 @@ public static class FileOperations
     /// Directory/File.Move. `onConflict` is asked per existing target. Honors cancellation; a partially written
     /// file is deleted on cancel/failure.
     /// Notes: folder-onto-folder merges silently (only file conflicts are asked); directory reparse points
-    /// (junctions/symlinked folders) inside a copied folder are skipped.</summary>
+    /// (junctions/symlinked folders) inside a copied folder are skipped.
+    /// `completed` (optional) receives each top-level item that landed at a NEW path (after collision renaming), so it can be
+    /// undone exactly; replaced/merged/skipped items are not listed. It is filled as items finish, so it is valid after a cancel.</summary>
     public static async Task TransferAsync(IReadOnlyList<string> sources, string destDir, bool move,
-        Func<string, ConflictChoice> onConflict, IProgress<OperationProgress>? progress, CancellationToken ct)
+        Func<string, ConflictChoice> onConflict, IProgress<OperationProgress>? progress, CancellationToken ct,
+        List<TransferredItem>? completed = null)
     {
         var srcs = sources.Select(Path.TrimEndingDirectorySeparator).ToArray();
         foreach (var s in srcs)
@@ -82,8 +88,32 @@ public static class FileOperations
                 target = Path.Combine(destDir, CopyName(destDir, name, isDir));
             }
             ctx.Current = name;
-            if (isDir) await TransferDir(src, target, move, onConflict, ctx, ct).ConfigureAwait(false);
-            else await TransferFile(src, target, move, onConflict, ctx, ct).ConfigureAwait(false);
+            string wanted = target;
+            bool existed = File.Exists(wanted) || Directory.Exists(wanted);
+            string? final = isDir ? await TransferDir(src, target, move, onConflict, ctx, ct).ConfigureAwait(false)
+                                  : await TransferFile(src, target, move, onConflict, ctx, ct).ConfigureAwait(false);
+            if (final != null && (!existed || !SamePath(final, wanted))) completed?.Add(new TransferredItem(src, final));
+            ctx.ItemsDone++;
+            ctx.Report(force: false);
+        }
+        ctx.Done = Math.Max(ctx.Done, ctx.Total);
+        ctx.Report(force: true);
+    }
+
+    /// <summary>Copies/moves each Source to exactly Destination (no renaming; an existing target is skipped). Used by undo/redo.</summary>
+    public static async Task TransferExactAsync(IReadOnlyList<TransferredItem> items, bool move,
+        IProgress<OperationProgress>? progress, CancellationToken ct)
+    {
+        var ctx = new Ctx(progress, items.Count);
+        if (progress != null)
+            ctx.Total = (await Task.Run(() => MeasureCore(items.Select(i => i.Source).ToArray(), ct), ct).ConfigureAwait(false)).Bytes;
+        foreach (var (src, dst) in items)
+        {
+            ct.ThrowIfCancellationRequested();
+            ctx.Current = Path.GetFileName(dst);
+            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+            if (Directory.Exists(src)) await TransferDir(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false);
+            else await TransferFile(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false);
             ctx.ItemsDone++;
             ctx.Report(force: false);
         }
@@ -207,7 +237,7 @@ public static class FileOperations
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    private static async Task TransferFile(string src, string target, bool move,
+    private static async Task<string?> TransferFile(string src, string target, bool move,
         Func<string, ConflictChoice> onConflict, Ctx ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -217,7 +247,7 @@ public static class FileOperations
         {
             switch (onConflict(target))
             {
-                case ConflictChoice.Skip: ctx.Add(length); return;
+                case ConflictChoice.Skip: ctx.Add(length); return null;
                 case ConflictChoice.KeepBoth:
                     string dir = Path.GetDirectoryName(target)!;
                     target = Path.Combine(dir, PathUtil.UniqueName(dir, Path.GetFileName(target)));
@@ -234,10 +264,11 @@ public static class FileOperations
             if (overwrite) ClearReadOnly(target);
             File.Move(src, target, overwrite);
             ctx.Add(length);
-            return;
+            return target;
         }
         await CopyFileAsync(src, target, overwrite, ctx, ct).ConfigureAwait(false);
         if (move) { ClearReadOnly(src); File.Delete(src); }
+        return target;
     }
 
     private static async Task CopyFileAsync(string src, string dst, bool overwrite, Ctx ctx, CancellationToken ct)
@@ -288,7 +319,7 @@ public static class FileOperations
         finally { ArrayPool<byte>.Shared.Return(buffer); }
     }
 
-    private static async Task TransferDir(string src, string target, bool move,
+    private static async Task<string?> TransferDir(string src, string target, bool move,
         Func<string, ConflictChoice> onConflict, Ctx ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -296,7 +327,7 @@ public static class FileOperations
         {
             switch (onConflict(target))
             {
-                case ConflictChoice.Skip: return;
+                case ConflictChoice.Skip: return null;
                 case ConflictChoice.KeepBoth:
                     string dir = Path.GetDirectoryName(target)!;
                     target = Path.Combine(dir, PathUtil.UniqueName(dir, Path.GetFileName(target)));
@@ -308,7 +339,7 @@ public static class FileOperations
         if (move && !Directory.Exists(target) && SameVolume(src, target))
         {
             Directory.Move(src, target);
-            return;
+            return target;
         }
 
         var existed = Directory.Exists(target);
@@ -345,5 +376,6 @@ public static class FileOperations
             try { if (!Directory.EnumerateFileSystemEntries(src).Any()) Directory.Delete(src); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
+        return target;
     }
 }
