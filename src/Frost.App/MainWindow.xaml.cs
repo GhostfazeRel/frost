@@ -365,7 +365,7 @@ public partial class MainWindow : Window
     private void Cut_Click(object s, RoutedEventArgs e) => _vm.CopySelection(true);
     private void Copy_Click(object s, RoutedEventArgs e) => _vm.CopySelection(false);
     private void Paste_Click(object s, RoutedEventArgs e) => _vm.Paste();
-    private void Rename_Click(object s, RoutedEventArgs e) => _vm.BeginRenameSelection();
+    private void Rename_Click(object s, RoutedEventArgs e) => RenameSelection();
     private void Delete_Click(object s, RoutedEventArgs e) => _vm.Delete((Keyboard.Modifiers & ModifierKeys.Shift) != 0);
     private void Terminal_Click(object s, RoutedEventArgs e) => _vm.OpenTerminal();
 
@@ -600,7 +600,7 @@ public partial class MainWindow : Window
             m.Items.Add(MI("Copy", "", () => _vm.CopySelection(false), "Ctrl+C"));
             if (one is { IsDirectory: true }) m.Items.Add(MI("Paste into folder", "", () => _vm.Paste(one.FullPath), enabled: _vm.CanPaste()));
             m.Items.Add(MI("Copy path", "", _vm.CopyPath, "Ctrl+Shift+C"));
-            m.Items.Add(MI("Rename", "", _vm.BeginRenameSelection, "F2", enabled: one != null));
+            m.Items.Add(MI(one != null ? "Rename" : "Rename…", "", RenameSelection, "F2"));
             m.Items.Add(MI("Delete", "", () => _vm.Delete(false), "Del"));
             m.Items.Add(new Separator());
             if (one is { IsDirectory: true }) m.Items.Add(MI(_vm.IsPinned(one.FullPath) ? "Unpin from sidebar" : "Pin to sidebar", "", () => _vm.TogglePin(one.FullPath)));
@@ -797,7 +797,7 @@ public partial class MainWindow : Window
         else if (ctrl && !alt && shift && key == Key.C) _vm.CopyPath();
         else if (ctrl && !alt && !shift && key == Key.A) ActiveList.SelectAll();
         else if (!ctrl && !alt && key == Key.Delete) _vm.Delete(shift);
-        else if (!ctrl && !alt && !shift && key == Key.F2) _vm.BeginRenameSelection();
+        else if (!ctrl && !alt && !shift && key == Key.F2) RenameSelection();
         else if (alt && !ctrl && key == Key.Enter) _vm.Properties();
         else if (!ctrl && !alt && !shift && key == Key.Enter && !onButton && ActiveList.IsKeyboardFocusWithin) _vm.OpenSelection();
         else if (!ctrl && !alt && !shift && key == Key.Back && !onButton) t?.GoBack();
