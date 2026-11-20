@@ -66,6 +66,14 @@ public sealed class PreviewViewModel : ObservableObject
             var th = await thumbTask;
             if (ct.IsCancellationRequested) return;
             if (th != null) Picture = th;
+            if (Archives.IsZip(it.Name))
+            {
+                var z = await Task.Run(() => Archives.Describe(it.FullPath, 200), ct);
+                if (ct.IsCancellationRequested) return;
+                SizeText = $"{Format.Size(it.Entry.Size)} · {z.Count} entries, {Format.Size(z.Bytes)} uncompressed";
+                TextContent = string.Join('\n', z.Names);
+                return;
+            }
             if (TextExt.Contains(it.Entry.Extension) && it.Entry.Size < 1_000_000)
             {
                 var text = await Task.Run(() => ReadText(it.FullPath));

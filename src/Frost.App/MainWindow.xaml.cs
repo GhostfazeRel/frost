@@ -603,6 +603,8 @@ public partial class MainWindow : Window
             m.Items.Add(MI("Rename", "", _vm.BeginRenameSelection, "F2", enabled: one != null));
             m.Items.Add(MI("Delete", "", () => _vm.Delete(false), "Del"));
             m.Items.Add(new Separator());
+            m.Items.Add(MI("Compress to ZIP", "", CompressSelection));
+            if (one is { IsDirectory: false } && Archives.IsZip(one.Name)) { m.Items.Add(MI("Extract here", "", () => ExtractZip(one, false))); m.Items.Add(MI("Extract to…", "", () => ExtractZip(one, true))); }
             if (one is { IsDirectory: true }) m.Items.Add(MI(_vm.IsPinned(one.FullPath) ? "Unpin from sidebar" : "Pin to sidebar", "", () => _vm.TogglePin(one.FullPath)));
             m.Items.Add(MI("Open in terminal", "", () => _vm.OpenTerminal(one is { IsDirectory: true } ? one.FullPath : t.Path)));
             m.Items.Add(MI("Properties", "", () => _vm.Properties(), "Alt+Enter"));
