@@ -128,6 +128,7 @@ public sealed class MainViewModel : ObservableObject
     {
         var p = path != null && Directory.Exists(path) ? path : Paths.Home;
         var t = new TabViewModel(this, p);
+        RecentList.Add(Settings.RecentFolders, p);
         AddTab(t);
         if (activate) Activate(t);
     }
@@ -172,7 +173,7 @@ public sealed class MainViewModel : ObservableObject
         Activate(Tabs[(Tabs.IndexOf(CurrentTab) + dir + Tabs.Count) % Tabs.Count]);
     }
 
-    public void OnTabNavigated(TabViewModel t) { if (t == CurrentTab) { UpdateSidebarCurrent(); UpdatePreview(); } }
+    public void OnTabNavigated(TabViewModel t) { RecentList.Add(Settings.RecentFolders, t.Path); if (t == CurrentTab) { UpdateSidebarCurrent(); UpdatePreview(); } }
     public void RaiseItemsRebuilt(TabViewModel t) { ItemsRebuilt?.Invoke(t); if (t == CurrentTab) UpdatePreview(); }
 
     // ---- sidebar ----
