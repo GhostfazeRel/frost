@@ -11,8 +11,8 @@ public sealed class UndoTests : IDisposable
     private string Make(string n, string text = "x") { File.WriteAllText(P(n), text); return P(n); }
     // Fake recycle bin: just deletes.
     private static bool Del(IReadOnlyList<string> ps) { foreach (var p in ps) { if (Directory.Exists(p)) Directory.Delete(p, true); else File.Delete(p); } return true; }
-    private static Task<UndoOutcome> Undo(UndoHistory h) => h.UndoAsync(Del, null, default);
-    private static Task<UndoOutcome> Redo(UndoHistory h) => h.RedoAsync(Del, null, default);
+    private static Task<UndoOutcome> Undo(UndoHistory h, Func<string, bool>? ask = null) => h.UndoAsync(Del, ask ?? (_ => false), null, default);
+    private static Task<UndoOutcome> Redo(UndoHistory h) => h.RedoAsync(Del, _ => false, null, default);
 
     [Fact]
     public async Task Rename_undo_and_redo()
@@ -118,7 +118,10 @@ public sealed class UndoTests : IDisposable
         Assert.False(r.Ok);
         Assert.Equal("blocker", File.ReadAllText(src));
         Assert.True(File.Exists(Path.Combine(sub, "m.txt")));
-        Assert.False(h.CanUndo); // refused entry is dropped
+        Assert.True(h.CanUndo); // refused entry stays so it can be retried
+        File.Delete(src);
+        Assert.True((await Undo(h)).Ok);
+        Assert.True(File.Exists(src));
     }
 
     [Fact]
@@ -149,6 +152,127 @@ public sealed class UndoTests : IDisposable
         await Undo(h);
         Assert.True(h.CanRedo);
         h.RecordCreate(P("zzz"), false);
+        Assert.False(h.CanRedo);
+    }
+
+    [Fact]
+    public async Task Modified_copy_is_not_recycled_without_confirmation()
+    {
+        var h = new UndoHistory();
+        string src = Make("f.txt", "data");
+        var done = new List<TransferredItem>();
+        await FileOperations.TransferAsync(new[] { src }, _d, false, _ => ConflictChoice.Skip, null, default, done);
+        h.RecordTransfer(false, done);
+        string copy = done[0].Destination;
+        File.WriteAllText(copy, "my edits, longer");
+        string? asked = null;
+        var r = await Undo(h, m => { asked = m; return false; });
+        Assert.False(r.Ok);
+        Assert.Contains("changed since it was copied", asked);
+        Assert.Equal("my edits, longer", File.ReadAllText(copy));
+        Assert.True(h.CanUndo);
+        Assert.True((await Undo(h, _ => true)).Ok); // user confirms
+        Assert.False(File.Exists(copy));
+    }
+
+    [Fact]
+    public async Task Filled_created_folder_needs_confirmation_but_empty_one_does_not()
+    {
+        var h = new UndoHistory();
+        string f = FileOperations.CreateFolder(_d);
+        h.RecordCreate(f, true);
+        File.WriteAllText(Path.Combine(f, "work.txt"), "x");
+        int asks = 0;
+        Assert.False((await Undo(h, _ => { asks++; return false; })).Ok);
+        Assert.Equal(1, asks);
+        Assert.True(File.Exists(Path.Combine(f, "work.txt")));
+        File.Delete(Path.Combine(f, "work.txt"));
+        Assert.True((await Undo(h, _ => { asks++; return false; })).Ok); // empty again: no question
+        Assert.Equal(1, asks);
+    }
+
+    [Fact]
+    public async Task Huge_folder_is_unverifiable_so_it_asks()
+    {
+        string big = Directory.CreateDirectory(P("big")).FullName;
+        for (int i = 0; i < ItemPrint.MaxEntries + 1; i++) File.WriteAllBytes(Path.Combine(big, $"{i}"), Array.Empty<byte>());
+        Assert.Null(ItemPrint.Of(big));
+        var h = new UndoHistory();
+        h.RecordCreate(big, true);
+        bool asked = false;
+        await Undo(h, _ => { asked = true; return false; });
+        Assert.True(asked);
+    }
+
+    [Fact]
+    public async Task Rename_undo_asks_when_a_different_file_now_has_the_name()
+    {
+        var h = new UndoHistory();
+        string a = Make("a.txt", "one"), b = FileOperations.Rename(a, "b.txt");
+        h.RecordRename(a, b);
+        File.Delete(b);
+        Make("b.txt", "something else entirely");
+        bool asked = false;
+        var r = await Undo(h, _ => { asked = true; return false; });
+        Assert.True(asked);
+        Assert.False(r.Ok);
+        Assert.True(File.Exists(b) && !File.Exists(a));
+        Assert.True(h.CanUndo);
+    }
+
+    [Fact]
+    public async Task Refused_undo_keeps_entry_and_succeeds_after_fixing_state()
+    {
+        var h = new UndoHistory();
+        string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
+        h.RecordRename(a, b);
+        Make("a.txt", "blocker");
+        Assert.False((await Undo(h)).Ok);
+        File.Delete(a);
+        Assert.True((await Undo(h)).Ok);
+        Assert.True(File.Exists(a));
+    }
+
+    [Fact]
+    public async Task Partial_undo_reports_and_keeps_the_remainder()
+    {
+        var h = new UndoHistory();
+        string s1 = Make("p1.txt"), s2 = Make("p2.txt");
+        var done = new List<TransferredItem>();
+        await FileOperations.TransferAsync(new[] { s1, s2 }, Directory.CreateDirectory(P("d")).FullName, false, _ => ConflictChoice.Skip, null, default, done);
+        h.RecordTransfer(false, done);
+        // recycle only deletes the first path (second "fails")
+        bool Half(IReadOnlyList<string> ps) { File.Delete(ps[0]); return false; }
+        var r = await h.UndoAsync(Half, _ => true, null, default);
+        Assert.False(r.Ok);
+        Assert.Contains("p1.txt", r.Message);
+        Assert.Contains("p2.txt", r.Message);
+        Assert.Equal("copy of \"p2.txt\"", h.UndoLabel); // remainder is the undo entry
+        Assert.Equal("copy of \"p1.txt\"", h.RedoLabel);
+        Assert.True((await Undo(h)).Ok);
+        Assert.False(h.CanUndo);
+    }
+
+    [Fact]
+    public async Task TransferExact_reports_skipped_items()
+    {
+        string src = Make("s.txt"), dst = Make("t.txt", "existing");
+        var done = new List<TransferredItem>();
+        var skipped = await FileOperations.TransferExactAsync(new[] { new TransferredItem(src, dst) }, false, null, default, done);
+        Assert.Single(skipped);
+        Assert.Empty(done);
+        Assert.Equal("existing", File.ReadAllText(dst));
+    }
+
+    [Fact]
+    public async Task Stale_redo_is_not_created_when_an_operation_is_recorded_during_undo()
+    {
+        var h = new UndoHistory();
+        string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
+        h.RecordRename(a, b);
+        File.WriteAllText(b, "changed so that confirm is asked");
+        var r = await h.UndoAsync(Del, _ => { h.RecordCreate(P("n"), true); return true; }, null, default);
+        Assert.True(r.Ok);
         Assert.False(h.CanRedo);
     }
 }

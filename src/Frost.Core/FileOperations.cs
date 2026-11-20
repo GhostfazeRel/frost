@@ -7,8 +7,8 @@ public sealed record OperationProgress(string CurrentItem, long BytesDone, long 
 
 public enum ConflictChoice { Replace, Skip, KeepBoth }
 
-/// <summary>A top-level item a transfer created: where it came from and the exact path it ended up at.</summary>
-public sealed record TransferredItem(string Source, string Destination);
+/// <summary>A top-level item a transfer created: where it came from and the exact path it ended up at (Print: see ItemPrint, set by UndoHistory).</summary>
+public sealed record TransferredItem(string Source, string Destination, string? Print = null);
 
 public static class FileOperations
 {
@@ -100,25 +100,32 @@ public static class FileOperations
         ctx.Report(force: true);
     }
 
-    /// <summary>Copies/moves each Source to exactly Destination (no renaming; an existing target is skipped). Used by undo/redo.</summary>
-    public static async Task TransferExactAsync(IReadOnlyList<TransferredItem> items, bool move,
-        IProgress<OperationProgress>? progress, CancellationToken ct)
+    /// <summary>Copies/moves each Source to exactly Destination (no renaming; an existing target is skipped, never overwritten).
+    /// Used by undo/redo. Items that finished are added to `done` as they complete (valid after a cancel/failure);
+    /// returns the items that were skipped.</summary>
+    public static async Task<IReadOnlyList<TransferredItem>> TransferExactAsync(IReadOnlyList<TransferredItem> items, bool move,
+        IProgress<OperationProgress>? progress, CancellationToken ct, List<TransferredItem>? done = null)
     {
+        var skipped = new List<TransferredItem>();
         var ctx = new Ctx(progress, items.Count);
         if (progress != null)
             ctx.Total = (await Task.Run(() => MeasureCore(items.Select(i => i.Source).ToArray(), ct), ct).ConfigureAwait(false)).Bytes;
-        foreach (var (src, dst) in items)
+        foreach (var item in items)
         {
             ct.ThrowIfCancellationRequested();
+            string src = item.Source, dst = item.Destination;
             ctx.Current = Path.GetFileName(dst);
             Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-            if (Directory.Exists(src)) await TransferDir(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false);
-            else await TransferFile(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false);
+            string? r = Directory.Exists(src)
+                ? await TransferDir(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false)
+                : await TransferFile(src, dst, move, _ => ConflictChoice.Skip, ctx, ct).ConfigureAwait(false);
+            if (r == null) skipped.Add(item); else done?.Add(item);
             ctx.ItemsDone++;
             ctx.Report(force: false);
         }
         ctx.Done = Math.Max(ctx.Done, ctx.Total);
         ctx.Report(force: true);
+        return skipped;
     }
 
     /// <summary>Permanent delete (files and folders recursively). Recycle-bin delete lives in Frost.Shell.</summary>
