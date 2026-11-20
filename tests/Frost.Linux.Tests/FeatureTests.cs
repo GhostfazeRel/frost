@@ -192,3 +192,51 @@ public class ClipboardTests
         w.Close();
     }
 }
+
+public class DefaultFileManagerMenuTests
+{
+    static void Slice() => Dispatcher.UIThread.MainLoop(new CancellationTokenSource(20).Token);
+    static void Pump(int ms) { var end = DateTime.UtcNow.AddMilliseconds(ms); while (DateTime.UtcNow < end) Slice(); }
+
+    static string QueryDefault()
+    {
+        var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("xdg-mime", new[] { "query", "default", "inode/directory" }) { RedirectStandardOutput = true })!;
+        var o = p.StandardOutput.ReadToEnd().Trim(); p.WaitForExit(); return o;
+    }
+
+    /// <summary>Opens the "⋯" menu and clicks the item whose text starts with <paramref name="header"/>.</summary>
+    static void ClickMoreMenu(MainWindow w, string header)
+    {
+        w.FindControl<Button>("MoreButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Pump(300);
+        var items = MainWindow.LastMenu!.Items.OfType<MenuItem>().ToList();
+        string Text(MenuItem m) => (m.Header as Grid)?.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? m.Header as string ?? "";
+        var item = items.FirstOrDefault(m => Text(m).StartsWith(header));
+        Assert.True(item != null, $"no menu item \"{header}\"; found: " + string.Join(", ", items.Select(Text)));
+        item!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        MainWindow.LastMenu.Hide();
+        Pump(300);
+    }
+
+    [AvaloniaFact]
+    public void More_menu_makes_Frost_the_default_and_restores_the_previous_one()
+    {
+        if (!File.Exists("/usr/bin/xdg-mime")) return;
+        var data = Environment.GetEnvironmentVariable("XDG_DATA_HOME")!;
+        var apps = Path.Combine(data, "applications");
+        Directory.CreateDirectory(apps);
+        if (File.Exists(Path.Combine(data, "frost", "previous-default"))) File.Delete(Path.Combine(data, "frost", "previous-default"));
+        foreach (var id in new[] { "frost.desktop", "org.example.Files.desktop" })
+            File.WriteAllText(Path.Combine(apps, id), "[Desktop Entry]\nType=Application\nName=x\nExec=/usr/bin/true\nMimeType=inode/directory;\n");
+        System.Diagnostics.Process.Start("xdg-mime", new[] { "default", "org.example.Files.desktop", "inode/directory" })!.WaitForExit();
+
+        var w = new MainWindow(Directory.CreateTempSubdirectory("frost-m-").FullName);
+        w.Show();
+        Pump(300);
+        ClickMoreMenu(w, "Make Frost the default file manager");
+        Assert.Equal("frost.desktop", QueryDefault());
+        ClickMoreMenu(w, "Restore previous default file manager");
+        Assert.Equal("org.example.Files.desktop", QueryDefault());
+        w.Close();
+    }
+}

@@ -26,13 +26,16 @@ cp -r "$here/app" "$dest/app"
 cp "$here/uninstall.sh" "$dest/uninstall.sh"
 ln -sf "$dest/app/Frost" "$HOME/.local/bin/frost"
 
+# xdg-open (xdg-utils 1.2) can't run a quoted Exec path, so quote only when the path needs it.
+exe="$dest/app/Frost"
+[[ "$exe" == *" "* ]] && exe="\"$exe\""
 cat > "$apps/frost.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Frost
 GenericName=File Manager
 Comment=Browse and manage your files
-Exec="$dest/app/Frost" %U
+Exec=$exe %U
 Icon=system-file-manager
 Terminal=false
 Categories=System;FileTools;FileManager;

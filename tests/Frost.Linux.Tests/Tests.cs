@@ -10,6 +10,8 @@ using Frost.Linux;
 using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(Frost.Linux.Tests.TestApp))]
+// Several tests share the sandboxed mimeapps.list, so run them one at a time.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Frost.Linux.Tests;
 

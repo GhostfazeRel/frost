@@ -128,9 +128,10 @@ public partial class MainWindow : Window
         return m;
     }
 
+    internal static MenuFlyout? LastMenu; // for tests: flyouts live in their own popup, outside the window's tree
     static void Flyout(Control anchor, IEnumerable<Control> items, bool atPointer = false)
     {
-        var f = new MenuFlyout { ItemsSource = items.ToList() };
+        var f = LastMenu = new MenuFlyout { ItemsSource = items.ToList() };
         f.ShowAt(anchor, atPointer);
     }
 
