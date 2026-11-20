@@ -7,8 +7,8 @@ public sealed record OperationProgress(string CurrentItem, long BytesDone, long 
 
 public enum ConflictChoice { Replace, Skip, KeepBoth }
 
-/// <summary>A top-level item a transfer created: where it came from and the exact path it ended up at (Print: see ItemPrint, set by UndoHistory).</summary>
-public sealed record TransferredItem(string Source, string Destination, string? Print = null);
+/// <summary>A top-level item a transfer created: where it came from and the exact path it ended up at.</summary>
+public sealed record TransferredItem(string Source, string Destination);
 
 public static class FileOperations
 {

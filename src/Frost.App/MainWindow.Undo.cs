@@ -31,8 +31,9 @@ public partial class MainWindow
         try
         {
             Func<IReadOnlyList<string>, bool> recycle = paths => ShellActions.Recycle(paths, this);
-            Func<string, bool> confirm = msg =>
-                DialogWindow.Show(this, "Changed since", msg, new[] { "Leave it", "Continue anyway", "Cancel" }, null, out _) == 1; // default: leave it
+            // "Leave it" = false (entry dropped), "Continue anyway" = true, Cancel / Esc / close = null (abort the whole undo)
+            Func<string, bool?> confirm = msg =>
+                DialogWindow.Show(this, "Changed since", msg, new[] { "Leave it", "Continue anyway", "Cancel" }, null, out _) switch { 0 => false, 1 => true, _ => null };
             var progress = new Progress<OperationProgress>(op.Report);
             var r = redo ? await _vm.History.RedoAsync(recycle, confirm, progress, op.Cts.Token)
                          : await _vm.History.UndoAsync(recycle, confirm, progress, op.Cts.Token);

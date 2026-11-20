@@ -11,7 +11,7 @@ public sealed class UndoTests : IDisposable
     private string Make(string n, string text = "x") { File.WriteAllText(P(n), text); return P(n); }
     // Fake recycle bin: just deletes.
     private static bool Del(IReadOnlyList<string> ps) { foreach (var p in ps) { if (Directory.Exists(p)) Directory.Delete(p, true); else File.Delete(p); } return true; }
-    private static Task<UndoOutcome> Undo(UndoHistory h, Func<string, bool>? ask = null) => h.UndoAsync(Del, ask ?? (_ => false), null, default);
+    private static Task<UndoOutcome> Undo(UndoHistory h, Func<string, bool?>? ask = null) => h.UndoAsync(Del, ask ?? (_ => false), null, default);
     private static Task<UndoOutcome> Redo(UndoHistory h) => h.RedoAsync(Del, _ => false, null, default);
 
     [Fact]
@@ -20,6 +20,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         Assert.Equal("rename of \"b.txt\"", h.UndoLabel);
         Assert.True((await Undo(h)).Ok);
         Assert.True(File.Exists(a) && !File.Exists(b));
@@ -34,6 +35,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         Make("a.txt", "other");
         var r = await Undo(h);
         Assert.False(r.Ok);
@@ -47,6 +49,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         File.Delete(b);
         Assert.False((await Undo(h)).Ok);
     }
@@ -57,6 +60,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string f = FileOperations.CreateFolder(_d);
         h.RecordCreate(f, true);
+        await h.FingerprintsReady;
         Assert.True((await Undo(h)).Ok);
         Assert.False(Directory.Exists(f));
         Assert.True((await Redo(h)).Ok);
@@ -75,6 +79,7 @@ public sealed class UndoTests : IDisposable
         Assert.Single(done);
         Assert.Equal(P("f - Copy.txt"), done[0].Destination);
         h.RecordTransfer(false, done);
+        await h.FingerprintsReady;
         Assert.True((await Undo(h)).Ok);
         Assert.True(File.Exists(src));
         Assert.False(File.Exists(P("f - Copy.txt")));
@@ -108,6 +113,7 @@ public sealed class UndoTests : IDisposable
         var done = new List<TransferredItem>();
         await FileOperations.TransferAsync(new[] { src }, sub, true, _ => ConflictChoice.Skip, null, default, done);
         h.RecordTransfer(true, done);
+        await h.FingerprintsReady;
         Assert.True((await Undo(h)).Ok);
         Assert.True(File.Exists(src));
         Assert.True((await Redo(h)).Ok);
@@ -149,9 +155,11 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         await Undo(h);
         Assert.True(h.CanRedo);
         h.RecordCreate(P("zzz"), false);
+        await h.FingerprintsReady;
         Assert.False(h.CanRedo);
     }
 
@@ -163,6 +171,7 @@ public sealed class UndoTests : IDisposable
         var done = new List<TransferredItem>();
         await FileOperations.TransferAsync(new[] { src }, _d, false, _ => ConflictChoice.Skip, null, default, done);
         h.RecordTransfer(false, done);
+        await h.FingerprintsReady;
         string copy = done[0].Destination;
         File.WriteAllText(copy, "my edits, longer");
         string? asked = null;
@@ -170,9 +179,44 @@ public sealed class UndoTests : IDisposable
         Assert.False(r.Ok);
         Assert.Contains("changed since it was copied", asked);
         Assert.Equal("my edits, longer", File.ReadAllText(copy));
-        Assert.True(h.CanUndo);
-        Assert.True((await Undo(h, _ => true)).Ok); // user confirms
+        Assert.False(h.CanUndo); // "Leave it": the user decided, entry dropped so older ones stay reachable
+    }
+
+    [Fact]
+    public async Task Modified_copy_confirmed_is_recycled_and_cancel_keeps_the_entry()
+    {
+        var h = new UndoHistory();
+        string src = Make("f.txt", "data");
+        var done = new List<TransferredItem>();
+        await FileOperations.TransferAsync(new[] { src }, _d, false, _ => ConflictChoice.Skip, null, default, done);
+        h.RecordTransfer(false, done);
+        await h.FingerprintsReady;
+        string copy = done[0].Destination;
+        File.WriteAllText(copy, "my edits, longer");
+        Assert.False((await Undo(h, _ => null)).Ok); // Cancel aborts the whole undo
+        Assert.True(h.CanUndo && File.Exists(copy));
+        Assert.True((await Undo(h, _ => true)).Ok);
         Assert.False(File.Exists(copy));
+    }
+
+    [Fact]
+    public async Task Copy_deleted_outside_frost_drops_the_entry_so_older_undo_works()
+    {
+        var h = new UndoHistory();
+        string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
+        h.RecordRename(a, b);
+        string src = Make("f.txt", "data");
+        var done = new List<TransferredItem>();
+        await FileOperations.TransferAsync(new[] { src }, _d, false, _ => ConflictChoice.Skip, null, default, done);
+        h.RecordTransfer(false, done);
+        await h.FingerprintsReady;
+        File.Delete(done[0].Destination);
+        var r = await Undo(h);
+        Assert.False(r.Ok);
+        Assert.Contains("outside Frost", r.Message);
+        Assert.Contains("removed from the history", r.Message);
+        Assert.True((await Undo(h)).Ok); // the older rename is reachable again
+        Assert.True(File.Exists(a));
     }
 
     [Fact]
@@ -181,13 +225,17 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string f = FileOperations.CreateFolder(_d);
         h.RecordCreate(f, true);
+        await h.FingerprintsReady;
         File.WriteAllText(Path.Combine(f, "work.txt"), "x");
         int asks = 0;
         Assert.False((await Undo(h, _ => { asks++; return false; })).Ok);
         Assert.Equal(1, asks);
         Assert.True(File.Exists(Path.Combine(f, "work.txt")));
-        File.Delete(Path.Combine(f, "work.txt"));
-        Assert.True((await Undo(h, _ => { asks++; return false; })).Ok); // empty again: no question
+        Assert.False(h.CanUndo);
+        string g = FileOperations.CreateFolder(_d);
+        h.RecordCreate(g, true);
+        await h.FingerprintsReady;
+        Assert.True((await Undo(h, _ => { asks++; return false; })).Ok); // still empty: no question
         Assert.Equal(1, asks);
     }
 
@@ -199,6 +247,7 @@ public sealed class UndoTests : IDisposable
         Assert.Null(ItemPrint.Of(big));
         var h = new UndoHistory();
         h.RecordCreate(big, true);
+        await h.FingerprintsReady;
         bool asked = false;
         await Undo(h, _ => { asked = true; return false; });
         Assert.True(asked);
@@ -210,6 +259,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt", "one"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         File.Delete(b);
         Make("b.txt", "something else entirely");
         bool asked = false;
@@ -217,7 +267,44 @@ public sealed class UndoTests : IDisposable
         Assert.True(asked);
         Assert.False(r.Ok);
         Assert.True(File.Exists(b) && !File.Exists(a));
-        Assert.True(h.CanUndo);
+        Assert.False(h.CanUndo); // declined: dropped
+    }
+
+    [Fact]
+    public async Task Created_item_deleted_outside_frost_is_dropped()
+    {
+        var h = new UndoHistory();
+        string f = FileOperations.CreateFolder(_d);
+        h.RecordCreate(f, true);
+        await h.FingerprintsReady;
+        Directory.Delete(f);
+        var r = await Undo(h);
+        Assert.False(r.Ok);
+        Assert.False(h.CanUndo);
+    }
+
+    [Fact]
+    public async Task Pending_or_missing_fingerprint_is_treated_as_unverifiable()
+    {
+        var h = new UndoHistory();
+        string f = FileOperations.CreateFolder(_d);
+        h.RecordCreate(f, true); // no await FingerprintsReady
+        bool asked = false;
+        var task = Undo(h, _ => { asked = true; return false; });
+        await task;
+        // either the fingerprint finished first (no question, recycled) or it was pending (question): never silently wrong
+        Assert.True(asked ? Directory.Exists(f) : !Directory.Exists(f));
+    }
+
+    [Fact]
+    public async Task Fingerprint_budget_is_shared_across_the_operation()
+    {
+        string a = Directory.CreateDirectory(P("a")).FullName, b = Directory.CreateDirectory(P("b")).FullName;
+        for (int i = 0; i < 3000; i++) { File.WriteAllBytes(Path.Combine(a, $"{i}"), new byte[0]); File.WriteAllBytes(Path.Combine(b, $"{i}"), new byte[0]); }
+        int budget = ItemPrint.MaxEntries;
+        Assert.NotNull(ItemPrint.Of(a, ref budget));
+        Assert.Null(ItemPrint.Of(b, ref budget)); // 3000 + 3000 > 5000
+        await Task.CompletedTask;
     }
 
     [Fact]
@@ -226,6 +313,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         Make("a.txt", "blocker");
         Assert.False((await Undo(h)).Ok);
         File.Delete(a);
@@ -241,11 +329,11 @@ public sealed class UndoTests : IDisposable
         var done = new List<TransferredItem>();
         await FileOperations.TransferAsync(new[] { s1, s2 }, Directory.CreateDirectory(P("d")).FullName, false, _ => ConflictChoice.Skip, null, default, done);
         h.RecordTransfer(false, done);
+        await h.FingerprintsReady;
         // recycle only deletes the first path (second "fails")
         bool Half(IReadOnlyList<string> ps) { File.Delete(ps[0]); return false; }
         var r = await h.UndoAsync(Half, _ => true, null, default);
         Assert.False(r.Ok);
-        Assert.Contains("p1.txt", r.Message);
         Assert.Contains("p2.txt", r.Message);
         Assert.Equal("copy of \"p2.txt\"", h.UndoLabel); // remainder is the undo entry
         Assert.Equal("copy of \"p1.txt\"", h.RedoLabel);
@@ -270,6 +358,7 @@ public sealed class UndoTests : IDisposable
         var h = new UndoHistory();
         string a = Make("a.txt"), b = FileOperations.Rename(a, "b.txt");
         h.RecordRename(a, b);
+        await h.FingerprintsReady;
         File.WriteAllText(b, "changed so that confirm is asked");
         var r = await h.UndoAsync(Del, _ => { h.RecordCreate(P("n"), true); return true; }, null, default);
         Assert.True(r.Ok);
