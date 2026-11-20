@@ -1,0 +1,55 @@
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Frost.Linux.App" RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <Color x:Key="SystemAccentColor">#8AB4FF</Color>
+    <SolidColorBrush x:Key="TextControlBackground" Color="#22FFFFFF"/>
+    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#28FFFFFF"/>
+    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#2EFFFFFF"/>
+    <SolidColorBrush x:Key="Accent" Color="#8AB4FF"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#3A8AB4FF"/>
+    <SolidColorBrush x:Key="Text" Color="#F2F5FA"/>
+    <SolidColorBrush x:Key="Text2" Color="#A9B1C2"/>
+    <SolidColorBrush x:Key="Text3" Color="#7D8598"/>
+    <SolidColorBrush x:Key="Hover" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="Press" Color="#2EFFFFFF"/>
+    <SolidColorBrush x:Key="Selected" Color="#2E8AB4FF"/>
+    <SolidColorBrush x:Key="Input" Color="#16FFFFFF"/>
+    <SolidColorBrush x:Key="SubtleFill" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="SubtleRim" Color="#22FFFFFF"/>
+    <SolidColorBrush x:Key="TabActive" Color="#2AFFFFFF"/>
+    <SolidColorBrush x:Key="MenuBg" Color="#F21E232C"/>
+    <SolidColorBrush x:Key="CardBg" Color="#E61C212A"/>
+    <SolidColorBrush x:Key="WindowTint" Color="#4D0C1016"/>
+    <!-- No blur behind it, so darker than WindowTint to keep text readable. -->
+    <SolidColorBrush x:Key="WindowClear" Color="#990C1016"/>
+    <LinearGradientBrush x:Key="WindowFallback" StartPoint="0%,0%" EndPoint="100%,100%">
+      <GradientStop Color="#FF1B2233" Offset="0"/><GradientStop Color="#FF10131B" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="Rim" StartPoint="0%,0%" EndPoint="100%,100%">
+      <GradientStop Color="#78FFFFFF" Offset="0"/><GradientStop Color="#1CFFFFFF" Offset="0.35"/>
+      <GradientStop Color="#0CFFFFFF" Offset="0.7"/><GradientStop Color="#34FFFFFF" Offset="1"/>
+    </LinearGradientBrush>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme/>
+    <Style Selector="Window"><Setter Property="FontSize" Value="13"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+    <Style Selector="Button"><Setter Property="CornerRadius" Value="16"/><Setter Property="Padding" Value="12,5"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="MinHeight" Value="32"/></Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Hover}"/><Setter Property="BorderBrush" Value="Transparent"/></Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Press}"/></Style>
+    <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource AccentSoft}"/><Setter Property="BorderBrush" Value="{StaticResource Accent}"/></Style>
+    <Style Selector="Button.tab"><Setter Property="CornerRadius" Value="12"/><Setter Property="Padding" Value="10,4"/></Style>
+    <Style Selector="Button.tab.on /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource TabActive}"/></Style>
+    <Style Selector="Button.side"><Setter Property="CornerRadius" Value="10"/><Setter Property="HorizontalAlignment" Value="Stretch"/><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="MinHeight" Value="30"/></Style>
+    <Style Selector="Button.side.on /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Selected}"/></Style>
+    <Style Selector="TextBox"><Setter Property="CornerRadius" Value="10"/><Setter Property="Background" Value="{StaticResource Input}"/><Setter Property="MinHeight" Value="32"/></Style>
+    <Style Selector="ListBoxItem"><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="8,3"/><Setter Property="Margin" Value="2,1"/></Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Selected}"/></Style>
+    <Style Selector="ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Hover}"/></Style>
+    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{StaticResource Selected}"/></Style>
+    <Style Selector="MenuFlyoutPresenter, ContextMenu"><Setter Property="Background" Value="{StaticResource MenuBg}"/><Setter Property="CornerRadius" Value="14"/><Setter Property="BorderBrush" Value="{StaticResource SubtleRim}"/><Setter Property="Padding" Value="4"/></Style>
+    <Style Selector="MenuItem"><Setter Property="CornerRadius" Value="9"/></Style>
+    <Style Selector="ProgressBar"><Setter Property="CornerRadius" Value="3"/><Setter Property="MinHeight" Value="6"/><Setter Property="Height" Value="6"/></Style>
+    <Style Selector="TextBlock.dim"><Setter Property="Foreground" Value="{StaticResource Text2}"/></Style>
+    <Style Selector="Border.card"><Setter Property="Background" Value="{StaticResource CardBg}"/><Setter Property="CornerRadius" Value="12"/><Setter Property="BorderBrush" Value="{StaticResource SubtleRim}"/><Setter Property="BorderThickness" Value="1"/></Style>
+  </Application.Styles>
+</Application>

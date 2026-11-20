@@ -2,9 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/Frost.App/Frost.App.csproj" />
     <Project Path="src/Frost.Core/Frost.Core.csproj" />
+    <Project Path="src/Frost.Linux/Frost.Linux.csproj" />
     <Project Path="src/Frost.Shell/Frost.Shell.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Frost.Core.Tests/Frost.Core.Tests.csproj" />
+    <Project Path="tests/Frost.Linux.Tests/Frost.Linux.Tests.csproj" />
   </Folder>
 </Solution>

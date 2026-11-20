@@ -1,0 +1,14 @@
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
+namespace Frost.Linux;
+public class App : Application
+{
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d)
+            d.MainWindow = new MainWindow(d.Args is { Length: > 0 } a ? Platform.StartPath(a[0]) : null);
+        base.OnFrameworkInitializationCompleted();
+    }
+}

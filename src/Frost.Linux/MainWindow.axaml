@@ -1,0 +1,76 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Frost.Linux.MainWindow" Title="Frost" Width="1180" Height="740" MinWidth="720" MinHeight="420"
+        Background="Transparent">
+  <Border x:Name="Root">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" Margin="10,6,10,6">
+      <!-- tabs -->
+      <DockPanel Grid.Row="0" Margin="0,0,0,4">
+        <Button x:Name="NewTabButton" DockPanel.Dock="Right" Content="+" Padding="10,2" ToolTip.Tip="New tab (Ctrl+T)"/>
+        <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="TabStrip" Orientation="Horizontal" Spacing="4"/>
+        </ScrollViewer>
+      </DockPanel>
+      <!-- navigation row -->
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*,240" Margin="0,0,0,4">
+        <Button x:Name="BackButton" Grid.Column="0" Content="←" ToolTip.Tip="Back (Alt+Left)"/>
+        <Button x:Name="ForwardButton" Grid.Column="1" Content="→" ToolTip.Tip="Forward (Alt+Right)"/>
+        <Button x:Name="UpButton" Grid.Column="2" Content="↑" ToolTip.Tip="Up (Alt+Up)"/>
+        <Button x:Name="RefreshButton" Grid.Column="3" Content="↻" ToolTip.Tip="Refresh (F5)"/>
+        <Border x:Name="AddressHost" Grid.Column="4" Margin="6,0" CornerRadius="10" Background="{StaticResource Input}" BorderBrush="{StaticResource SubtleRim}" BorderThickness="1">
+          <Grid>
+            <ScrollViewer x:Name="CrumbScroll" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Background="Transparent">
+              <StackPanel x:Name="Crumbs" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0"/>
+            </ScrollViewer>
+            <TextBox x:Name="AddressBox" IsVisible="False"/>
+          </Grid>
+        </Border>
+        <TextBox x:Name="SearchBox" Grid.Column="5" Watermark="Filter (Enter searches subfolders)"/>
+      </Grid>
+      <!-- toolbar -->
+      <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="2" Margin="0,0,0,6">
+        <Button x:Name="NewButton" Content="New ▾"/>
+        <Button x:Name="CutButton" Content="Cut"/>
+        <Button x:Name="CopyButton" Content="Copy"/>
+        <Button x:Name="PasteButton" Content="Paste"/>
+        <Button x:Name="RenameButton" Content="Rename"/>
+        <Button x:Name="DeleteButton" Content="Delete"/>
+        <Button x:Name="SortButton" Content="Sort ▾"/>
+        <Button x:Name="ViewButton" Content="View ▾"/>
+        <Button x:Name="MoreButton" Content="⋯"/>
+      </StackPanel>
+      <!-- content -->
+      <Grid Grid.Row="3" ColumnDefinitions="210,*,Auto">
+        <Border Grid.Column="0" Classes="card" Margin="0,0,8,0" Padding="6">
+          <ScrollViewer><StackPanel x:Name="Side" Spacing="2"/></ScrollViewer>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="4">
+          <Grid RowDefinitions="Auto,*">
+            <Grid x:Name="Header" Grid.Row="0" ColumnDefinitions="*,150,120,90" Margin="10,0,10,2"/>
+            <ListBox x:Name="List" Grid.Row="1" Background="Transparent" SelectionMode="Multiple"/>
+            <TextBlock x:Name="OverlayText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="dim" IsHitTestVisible="False"/>
+          </Grid>
+        </Border>
+        <Border x:Name="PreviewPane" Grid.Column="2" Classes="card" Margin="8,0,0,0" Padding="14" Width="280" IsVisible="False">
+          <ScrollViewer>
+            <StackPanel Spacing="6">
+              <Image x:Name="PrevImage" MaxHeight="220" Stretch="Uniform" IsVisible="False"/>
+              <Path x:Name="PrevGlyph" Width="72" Height="72" Stretch="Uniform" HorizontalAlignment="Center"/>
+              <TextBlock x:Name="PrevTitle" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock x:Name="PrevInfo" Classes="dim" TextWrapping="Wrap"/>
+              <TextBlock x:Name="PrevText" FontFamily="monospace" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Text2}"/>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+      </Grid>
+      <!-- operations -->
+      <StackPanel x:Name="Ops" Grid.Row="4" Spacing="6" Margin="0,6,0,0"/>
+      <!-- status -->
+      <Grid Grid.Row="5" ColumnDefinitions="Auto,Auto,*,Auto" Margin="6,6,6,0">
+        <TextBlock x:Name="CountText" Grid.Column="0" Classes="dim"/>
+        <TextBlock x:Name="SelectionText" Grid.Column="1" Classes="dim" Margin="14,0,0,0"/>
+        <TextBlock x:Name="NoticeText" Grid.Column="2" Margin="14,0" Foreground="{StaticResource Accent}" TextTrimming="CharacterEllipsis"/>
+        <TextBlock x:Name="FreeText" Grid.Column="3" Classes="dim"/>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
