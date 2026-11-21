@@ -6,6 +6,18 @@ Explorer-compatible copy/paste, drag and drop and right-click menu.
 
 > **Early preview:** not yet tested on real Windows. Bug reports welcome (Issues, attach `%AppData%\Frost\crash.log`).
 
+## What's new in 0.4.0 (Windows and Linux)
+- **Picture preview on click.** Click a picture once and a large, correctly rotated preview opens on the right with its details: format, size in pixels and megapixels, dates, and for photos the date taken, camera, lens, exposure, focal length and location (with a Copy button and a "📍 has location" badge), plus the picture's five main colours (click one to copy its hex code). Other files close the pane again unless you pin it with Alt+P. The pane width is resizable and remembered; "Preview pictures on click" in the … menu turns auto-open off.
+- **Quick Look.** Press Space on any file for a floating preview: pictures with zoom and pan, text and code, ZIP contents, folders. Left/Right flip through the folder, Enter opens, Space or Esc closes.
+- **Photo tools** (right-click one or more pictures): Rotate left/right and Remove location (JPEG, lossless: only the metadata changes), Convert to PNG/JPG (and WebP on Linux), Resize (50%, 1920 px, 1280 px, custom). Conversions write new files next to the originals. Everything is undoable with Ctrl+Z.
+- **What's using space?** Bars showing what takes up space in the current folder, with drill-in.
+- **Find biggest files.** Scans every drive at once and shows the top 50 files on each, plus a combined list, live.
+- **Split view** (Ctrl+\\): two folders side by side. F6 switches side, F5 copies to the other side.
+- **Find duplicate files.** Groups identical files, with Keep newest/oldest, moved to the Recycle Bin/trash (undoable).
+- **Linux:** picture thumbnails in Large and Extra large views, shared with other apps through `~/.cache/thumbnails`.
+
+Known limits: Remove location clears the EXIF GPS data, not XMP location tags some editors add. HEIC/AVIF pictures show info but no preview without a codec. On Windows, converted/resized copies don't keep camera data and the split view's right side has no tabs (same on Linux).
+
 ## What's new in 0.3.0
 - **Undo / Redo.** Ctrl+Z undoes your last rename, new folder/file, copy, move or batch rename; Ctrl+Y (or Ctrl+Shift+Z) redoes it. Frost checks that everything is still where it should be and refuses rather than overwrite anything. Deleted files go to the Recycle Bin: Ctrl+Z offers to open it so you can restore them from there. The last 50 actions are remembered.
 - **ZIP archives.** Right-click any selection and choose "Compress to ZIP"; right-click a .zip for "Extract here" or "Extract to…". Runs in the operations panel with cancel, never overwrites (new names like "Photos (2).zip"), and refuses archives with unsafe paths. The preview pane lists a zip's contents.
@@ -13,7 +25,7 @@ Explorer-compatible copy/paste, drag and drop and right-click menu.
 - **Command palette and Go to folder.** Ctrl+Shift+P searches every Frost command by typing a few letters, with its shortcut shown. Ctrl+P jumps to any recent, pinned, drive or nearby folder, or paste a full path; Enter opens it here, Ctrl+Enter in a new tab.
 
 ## Install (Windows)
-Download `Frost-Setup-0.3.0.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest) and run it.
+Download `Frost-Setup-0.4.0.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest) and run it.
 It installs just for you into `%LocalAppData%\Programs\Frost` (no admin rights, no .NET needed), adds a Start menu shortcut
 and an entry in Settings > Apps. "Run without installing" starts Frost straight from the setup file.
 Requires Windows 10/11 x64 (the acrylic glass effect needs Windows 11).
@@ -32,10 +44,10 @@ To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both re
 whatever another app (e.g. Files) had set before.
 
 ## Linux
-Download `Frost-Linux-0.3.0-x64.tar.gz` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest), then:
+Download `Frost-Linux-0.4.0-x64.tar.gz` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest), then:
 
-    tar -xzf Frost-Linux-0.3.0-x64.tar.gz
-    cd Frost-Linux-0.3.0-x64
+    tar -xzf Frost-Linux-0.4.0-x64.tar.gz
+    cd Frost-Linux-0.4.0-x64
     ./install.sh
 
 It installs just for you (no root, no .NET needed) into `~/.local/share/frost`, adds Frost to your app launcher and a
@@ -70,7 +82,7 @@ The setup then reopens with your current options. Check by hand anytime: "…" m
 Linux: `dotnet test tests/Frost.Linux.Tests` (runs headless) and `packaging/linux/build.sh`, which writes
 `dist/Frost-Linux-<version>-x64.tar.gz`. Run from source: `dotnet run --project src/Frost.Linux`.
 
-The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-0.3.0.exe` (a file name containing "setup", or the `--install` argument, starts the installer).
+The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-0.4.0.exe` (a file name containing "setup", or the `--install` argument, starts the installer).
 
 ## Layout
 - `src/Frost.Core` – listing, sorting, search, copy/move/delete (cross-platform, unit tested)
@@ -83,7 +95,8 @@ The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-
 Ctrl+T/W new/close tab · Ctrl+Shift+T reopen tab · Ctrl+Tab next tab · Alt+Left/Right back/forward · Alt+Up parent ·
 Ctrl+L / F4 address bar · Ctrl+F / Ctrl+E search · F2 rename · Ctrl+Shift+N new folder · Ctrl+C/X/V · Del recycle ·
 Shift+Del delete permanently · Alt+P preview pane · Ctrl+wheel icon size · F5 refresh ·
-Ctrl+Z undo · Ctrl+Y / Ctrl+Shift+Z redo · Ctrl+Shift+P command palette · Ctrl+P go to folder (Ctrl+Enter: new tab) · F2 on several items: batch rename
+Ctrl+Z undo · Ctrl+Y / Ctrl+Shift+Z redo · Ctrl+Shift+P command palette · Ctrl+P go to folder (Ctrl+Enter: new tab) · F2 on several items: batch rename ·
+Space Quick Look · Ctrl+\\ split view · F6 switch side · F5 copy to other side (while split)
 
 ## Tester checklist (never run on Windows yet – report anything odd + crash.log)
 1. Launch: glass/acrylic background, rounded corners, maximize (edges not cut off), drag window by the tab strip, min/max/close buttons.
@@ -97,7 +110,7 @@ Ctrl+Z undo · Ctrl+Y / Ctrl+Shift+Z redo · Ctrl+Shift+P command palette · Ctr
 9. Search: type to filter, Enter for recursive search, Esc to cancel.
 10. Sidebar: quick access, pin a folder, drives with usage bars; preview pane (Alt+P) for an image, a .txt and a folder.
 11. Close and reopen: tabs, window size and view restored.
-12. Install: run `Frost-Setup-0.3.0.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
+12. Install: run `Frost-Setup-0.4.0.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
 13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer. An offline `\\server\share` opens Frost with a "Couldn't open" notice (no Frost/Explorer loop). With Files app set as default first, enabling then restoring Frost gives Files back folders and Win+E.
 14. "Restore Explorer as default" in the … menu -> folders, drives and Win+E open in Explorer again.
 15. Uninstall from Settings > Apps -> confirm dialog; shortcuts, the Apps entry and the install folder are gone, Explorer is the default again, `%AppData%\Frost` is still there.

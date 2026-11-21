@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     public MainWindow(string? startPath)
     {
         InitializeComponent();
+        Header.ColumnDefinitions = DetailColumns();
         if (_s.WindowWidth >= MinWidth && _s.WindowHeight >= MinHeight) { Width = _s.WindowWidth; Height = _s.WindowHeight; }
         if (_s.Maximized) WindowState = WindowState.Maximized;
         // Glass when the compositor can blur; plain see-through when it only composites alpha (niri/XWayland); else opaque.
@@ -130,6 +131,9 @@ public partial class MainWindow : Window
         m.Click += (_, _) => click();
         return m;
     }
+
+    // Name keeps a minimum width so a narrow list (preview pane or split view open) clips Size instead of overlapping text.
+    internal static ColumnDefinitions DetailColumns() => new() { new(GridLength.Star) { MinWidth = 140 }, new(150, GridUnitType.Pixel), new(120, GridUnitType.Pixel), new(90, GridUnitType.Pixel) };
 
     internal static MenuFlyout? LastMenu; // for tests: flyouts live in their own popup, outside the window's tree
     static void Flyout(Control anchor, IEnumerable<Control> items, bool atPointer = false)
@@ -344,7 +348,7 @@ public partial class MainWindow : Window
             List.ItemTemplate = new FuncDataTemplate<Item>((it, _) =>
             {
                 if (it == null) return null;
-                var g = new Grid { ColumnDefinitions = new("*,150,120,90"), Background = Brushes.Transparent };
+                var g = new Grid { ColumnDefinitions = DetailColumns(), Background = Brushes.Transparent };
                 g.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { Glyph(it.Glyph, it.Tint, 18), new TextBlock { Text = it.Name, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center } } });
                 string[] cols = { it.ModifiedText, it.TypeText, it.SizeText };
                 for (int i = 0; i < 3; i++) g.Children.Add(new TextBlock { Text = cols[i], Foreground = Dialogs.Res("Text2"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, [Grid.ColumnProperty] = i + 1 });

@@ -46,7 +46,7 @@
         <Grid x:Name="ListArea" Grid.Column="1" ColumnDefinitions="*,Auto,*">
           <Border x:Name="ListCard" Grid.Column="0" Classes="card" Padding="4">
             <Grid x:Name="ListGrid" RowDefinitions="Auto,*">
-              <Grid x:Name="Header" Grid.Row="0" ColumnDefinitions="*,150,120,90" Margin="10,0,10,2"/>
+              <Grid x:Name="Header" Grid.Row="0" Margin="10,0,10,2"/>
               <ListBox x:Name="List" Grid.Row="1" Background="Transparent" SelectionMode="Multiple"/>
               <TextBlock x:Name="OverlayText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="dim" IsHitTestVisible="False"/>
             </Grid>
