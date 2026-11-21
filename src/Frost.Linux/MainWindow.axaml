@@ -39,24 +39,34 @@
         <Button x:Name="MoreButton" Content="⋯"/>
       </StackPanel>
       <!-- content -->
-      <Grid Grid.Row="3" ColumnDefinitions="210,*,Auto">
+      <Grid x:Name="ContentGrid" Grid.Row="3" ColumnDefinitions="210,*,Auto,0">
         <Border Grid.Column="0" Classes="card" Margin="0,0,8,0" Padding="6">
           <ScrollViewer><StackPanel x:Name="Side" Spacing="2"/></ScrollViewer>
         </Border>
-        <Border Grid.Column="1" Classes="card" Padding="4">
-          <Grid RowDefinitions="Auto,*">
-            <Grid x:Name="Header" Grid.Row="0" ColumnDefinitions="*,150,120,90" Margin="10,0,10,2"/>
-            <ListBox x:Name="List" Grid.Row="1" Background="Transparent" SelectionMode="Multiple"/>
-            <TextBlock x:Name="OverlayText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="dim" IsHitTestVisible="False"/>
-          </Grid>
-        </Border>
-        <Border x:Name="PreviewPane" Grid.Column="2" Classes="card" Margin="8,0,0,0" Padding="14" Width="280" IsVisible="False">
-          <ScrollViewer>
+        <Grid x:Name="ListArea" Grid.Column="1" ColumnDefinitions="*,Auto,*">
+          <Border x:Name="ListCard" Grid.Column="0" Classes="card" Padding="4">
+            <Grid x:Name="ListGrid" RowDefinitions="Auto,*">
+              <Grid x:Name="Header" Grid.Row="0" ColumnDefinitions="*,150,120,90" Margin="10,0,10,2"/>
+              <ListBox x:Name="List" Grid.Row="1" Background="Transparent" SelectionMode="Multiple"/>
+              <TextBlock x:Name="OverlayText" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="dim" IsHitTestVisible="False"/>
+            </Grid>
+          </Border>
+          <GridSplitter x:Name="SplitSplitter" Grid.Column="1" Width="8" Background="Transparent" IsVisible="False" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"/>
+          <Border x:Name="Side2Host" Grid.Column="2" Classes="card" Padding="4" IsVisible="False"/>
+        </Grid>
+        <GridSplitter x:Name="PaneSplitter" Grid.Column="2" Width="8" Background="Transparent" IsVisible="False" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ToolTip.Tip="Drag to resize the preview"/>
+        <Border x:Name="PreviewPane" Grid.Column="3" Classes="card" Padding="14" IsVisible="False">
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Spacing="6">
-              <Image x:Name="PrevImage" MaxHeight="220" Stretch="Uniform" IsVisible="False"/>
+              <LayoutTransformControl x:Name="PrevHost" IsVisible="False" HorizontalAlignment="Center">
+                <Image x:Name="PrevImage" Stretch="Uniform"/>
+              </LayoutTransformControl>
               <Path x:Name="PrevGlyph" Width="72" Height="72" Stretch="Uniform" HorizontalAlignment="Center"/>
               <TextBlock x:Name="PrevTitle" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock x:Name="PrevBadge" Text="📍 has location" Foreground="{StaticResource Accent}" IsVisible="False"/>
               <TextBlock x:Name="PrevInfo" Classes="dim" TextWrapping="Wrap"/>
+              <StackPanel x:Name="PrevRows" Spacing="3"/>
+              <WrapPanel x:Name="PrevSwatches" IsVisible="False"/>
               <TextBlock x:Name="PrevText" FontFamily="monospace" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource Text2}"/>
             </StackPanel>
           </ScrollViewer>

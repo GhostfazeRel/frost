@@ -62,7 +62,7 @@ public sealed class Tab : IDisposable
     public void GoForward() { if (_history.CanGoForward) { _history.Forward(); AfterNav(null); } }
     public void Up() { var old = Path; if (_history.Parent() is { } p) { _history.Navigate(p); AfterNav(old); } }
     public void Refresh() => _ = LoadAsync();
-    public Task RefreshAsync(string? select = null) => LoadAsync(select, quiet: true);
+    public Task RefreshAsync(string? select = null, List<string>? selectMany = null) => LoadAsync(select, quiet: true, selectMany);
 
     void AfterNav(string? select)
     {
@@ -72,11 +72,12 @@ public sealed class Tab : IDisposable
     }
 
     // ---- listing ----
-    public async Task LoadAsync(string? select = null, bool quiet = false)
+    public async Task LoadAsync(string? select = null, bool quiet = false, List<string>? selectMany = null)
     {
         _listCts?.Cancel();
         var cts = _listCts = new CancellationTokenSource();
-        if (select != null) _pendingSelect = new() { select };
+        if (selectMany != null) _pendingSelect = selectMany;
+        else if (select != null) _pendingSelect = new() { select };
         else if (quiet && Selection.Count > 0) _pendingSelect = Selection.Select(s => s.FullPath).ToList();
         if (!quiet) { IsLoading = true; StatusChanged?.Invoke(this); }
         var path = Path;

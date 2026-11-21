@@ -13,7 +13,9 @@ public sealed class AppSettings
     public SortColumn SortColumn { get; set; } = SortColumn.Name;
     public bool SortDescending { get; set; }
     public bool ShowHidden { get; set; }
-    public bool PreviewPane { get; set; }
+    public bool PreviewPane { get; set; } // pinned with Alt+P
+    public bool PreviewOnClick { get; set; } = true; // pictures open the pane by themselves
+    public double PreviewWidth { get; set; } = 340;
     public double WindowWidth { get; set; }
     public double WindowHeight { get; set; }
     public bool Maximized { get; set; }

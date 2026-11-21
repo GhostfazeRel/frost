@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         // handledEventsToo: the ListBox marks clicks on empty space handled, so we would never see them.
         List.AddHandler(PointerPressedEvent, List_PointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         SetUpDragDrop();
+        SetUpSplit();
         List.PointerReleased += List_PointerReleased;
         List.PointerWheelChanged += (_, e) =>
         {
@@ -92,6 +93,7 @@ public partial class MainWindow : Window
         }, RoutingStrategies.Tunnel);
         Closing += (_, _) =>
         {
+            SavePaneWidth();
             _s.Maximized = WindowState == WindowState.Maximized;
             if (!_s.Maximized) { _s.WindowWidth = Width; _s.WindowHeight = Height; }
             _s.OpenTabs = _tabs.Select(t => t.Path).ToList();
@@ -106,7 +108,7 @@ public partial class MainWindow : Window
         else if (_tabs.Count == 0) { AddTab(Platform.Home); Activate(_tabs[0]); }
         else Activate(_tabs[Math.Clamp(_s.ActiveTab, 0, _tabs.Count - 1)]);
         LoadSidebar();
-        PreviewPane.IsVisible = _s.PreviewPane;
+        SetUpPreview();
     }
 
     // ================= small helpers =================
@@ -136,14 +138,14 @@ public partial class MainWindow : Window
         f.ShowAt(anchor, atPointer);
     }
 
-    IReadOnlyList<Item> Sel => _cur?.Selection ?? Array.Empty<Item>();
+    IReadOnlyList<Item> Sel => ActiveTab?.Selection ?? Array.Empty<Item>();
 
     // ================= tabs =================
     void AddTab(string path, int? index = null)
     {
         var t = new Tab(_s, Notify, path);
         t.Rebuilt += OnRebuilt;
-        t.Navigated += tab => { RecentList.Add(_s.RecentFolders, tab.Path); if (tab == _cur) { SearchBox.Text = ""; UpdateNav(); UpdateSidebarCurrent(); } RebuildTabs(); };
+        t.Navigated += tab => { RecentList.Add(_s.RecentFolders, tab.Path); if (tab == _cur) { CloseSpace(); SearchBox.Text = ""; UpdateNav(); UpdateSidebarCurrent(); } RebuildTabs(); };
         t.StatusChanged += tab => { if (tab == _cur) UpdateStatus(); };
         if (index is int i && i <= _tabs.Count) _tabs.Insert(i, t); else _tabs.Add(t);
         RebuildTabs();
@@ -161,6 +163,7 @@ public partial class MainWindow : Window
     {
         if (_cur == t) return;
         _cur = t;
+        CloseSpace();
         SearchBox.Text = "";
         t.EnsureLoaded();
         RebuildTabs(); UpdateNav(); UpdateSidebarCurrent();
@@ -327,6 +330,12 @@ public partial class MainWindow : Window
 
     void ApplyView()
     {
+        ApplyView1();
+        List2.ItemsPanel = List.ItemsPanel; List2.ItemTemplate = List.ItemTemplate;
+    }
+
+    void ApplyView1()
+    {
         bool details = _s.View == ViewMode.Details;
         Header.IsVisible = details;
         if (details)
@@ -352,7 +361,7 @@ public partial class MainWindow : Window
                 Width = size + 28, Spacing = 6, Background = Brushes.Transparent,
                 Children =
                 {
-                    Glyph(it.Glyph, it.Tint, size),
+                    ItemIcon(it, size),
                     new TextBlock { Text = it.Name, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center },
                 }
             });
@@ -388,7 +397,7 @@ public partial class MainWindow : Window
             if (items.Count > 0) List.ScrollIntoView(items[0]);
         }
         UpdateStatus();
-        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox) FocusList();
+        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox && !Side2Active) FocusList();
     }
 
     void UpdateStatus()
@@ -402,8 +411,9 @@ public partial class MainWindow : Window
     {
         if (_cur == null) return;
         _cur.Selection = List.SelectedItems!.Cast<Item>().ToList();
-        long bytes = Sel.Where(i => !i.IsDirectory).Sum(i => i.Entry.Size);
-        SelectionText.Text = Sel.Count == 0 ? "" : Sel.Count + " selected" + (bytes > 0 ? $" ({Format.Size(bytes)})" : "");
+        var mine = _cur.Selection;
+        long bytes = mine.Where(i => !i.IsDirectory).Sum(i => i.Entry.Size);
+        SelectionText.Text = mine.Count == 0 ? "" : mine.Count + " selected" + (bytes > 0 ? $" ({Format.Size(bytes)})" : "");
         UpdatePreview();
     }
 
@@ -464,7 +474,12 @@ public partial class MainWindow : Window
         foreach (var m in UndoItems()) yield return m;
         yield return new Separator();
         yield return MI("Show hidden items", ToggleHidden, "Ctrl+H", check: _s.ShowHidden);
-        yield return MI("Preview pane", TogglePreview, "Alt+P", check: _s.PreviewPane);
+        yield return MI("Preview pane (keep open)", TogglePreview, "Alt+P", check: _s.PreviewPane);
+        yield return MI("Preview pictures on click", TogglePreviewOnClick, check: _s.PreviewOnClick);
+        yield return MI("Split view", ToggleSplit, "Ctrl+\\", check: _split);
+        yield return MI("What's using space?", () => ShowSpace(), "");
+        yield return MI("Find biggest files", () => ShowBiggestFiles());
+        yield return MI("Find duplicate files", () => ShowDuplicates());
         yield return MI("Open terminal here", () => OpenTerminal(null));
         yield return new Separator();
         yield return MI("Copy path", CopyPath, "Ctrl+Shift+C");
@@ -480,7 +495,7 @@ public partial class MainWindow : Window
 
     IEnumerable<Control> ContextMenuItems(bool onItem)
     {
-        var t = _cur;
+        var t = ActiveTab;
         if (t == null) yield break;
         var sel = t.Selection;
         if (onItem && sel.Count > 0)
@@ -496,9 +511,11 @@ public partial class MainWindow : Window
             yield return MI(one != null ? "Rename" : "Rename…", RenameSelection, "F2");
             yield return MI("Move to trash", () => DeleteSelection(false), "Del");
             yield return new Separator();
+            if (_split) { yield return MI("Copy to other side", () => ToOtherSide(false), "F5"); yield return MI("Move to other side", () => ToOtherSide(true)); }
             yield return MI("Compress to ZIP", CompressSelection);
             if (one is { IsDirectory: false } && Archives.IsZip(one.Name)) { yield return MI("Extract here", () => ExtractZip(one)); }
             if (one is { IsDirectory: true }) yield return MI(IsPinned(one.FullPath) ? "Unpin from sidebar" : "Pin to sidebar", () => TogglePin(one.FullPath));
+            foreach (var pm in PhotoMenuItems()) yield return pm;
             yield return MI("Open in terminal", () => OpenTerminal(one is { IsDirectory: true } ? one.FullPath : t.Path));
         }
         else
@@ -516,7 +533,6 @@ public partial class MainWindow : Window
     }
 
     void ToggleHidden() { _s.ShowHidden = !_s.ShowHidden; foreach (var t in _tabs) if (t.Loaded) t.Refresh(); }
-    void TogglePreview() { _s.PreviewPane = !_s.PreviewPane; PreviewPane.IsVisible = _s.PreviewPane; if (_s.PreviewPane) UpdatePreview(); }
     void OpenTerminal(string? folder) { folder ??= _cur?.Path; if (folder == null) return; try { Platform.OpenTerminal(folder); } catch (Exception ex) { Notify("Couldn't open a terminal: " + ex.Message); } }
 
     void OpenPath(string path) { try { Platform.Open(path); } catch (Exception ex) { Notify("Couldn't open file: " + ex.Message); } }
@@ -533,83 +549,6 @@ public partial class MainWindow : Window
         else foreach (var i in Sel.ToList()) Open(i, newTab: true);
     }
 
-    // ================= preview pane =================
-    void UpdatePreview() { if (_s.PreviewPane) { _previewTimer.Stop(); _previewTimer.Start(); } }
-
-    async Task ShowPreview()
-    {
-        _previewCts?.Cancel();
-        var cts = _previewCts = new CancellationTokenSource();
-        var ct = cts.Token;
-        PrevImage.IsVisible = false; PrevImage.Source = null; PrevGlyph.IsVisible = true; PrevText.Text = "";
-        var sel = Sel;
-        try
-        {
-            if (sel.Count == 0)
-            {
-                if (_cur == null) return;
-                PrevTitle.Text = _cur.Title; PrevInfo.Text = "Folder\n" + _cur.CountText;
-                var g = Glyphs.For(new FileEntry("", _cur.Path, true, 0, default, default, FileAttributes.Directory));
-                PrevGlyph.Data = g.Geo; PrevGlyph.Fill = g.Fill;
-                return;
-            }
-            if (sel.Count > 1)
-            {
-                PrevTitle.Text = sel.Count + " items selected"; PrevInfo.Text = Format.Size(sel.Where(i => !i.IsDirectory).Sum(i => i.Entry.Size));
-                PrevGlyph.Data = sel[0].Glyph; PrevGlyph.Fill = sel[0].Tint;
-                return;
-            }
-            var it = sel[0];
-            PrevTitle.Text = it.Name;
-            PrevGlyph.Data = it.Glyph; PrevGlyph.Fill = it.Tint;
-            string head = $"{it.TypeText}\nModified: {it.ModifiedText}\nCreated: {Format.Date(it.Entry.Created, DateTime.Now)}\n";
-            PrevInfo.Text = head;
-            if (it.IsDirectory)
-            {
-                PrevInfo.Text = head + "Calculating…";
-                var m = await FileOperations.MeasureAsync(new[] { it.FullPath }, ct);
-                if (!ct.IsCancellationRequested) PrevInfo.Text = head + $"{Format.Size(m.Bytes)} · {m.Files} files, {m.Folders} folders";
-                return;
-            }
-            PrevInfo.Text = head + Format.Size(it.Entry.Size);
-            if (Archives.IsZip(it.Name))
-            {
-                var z = await Task.Run(() => Archives.Describe(it.FullPath, 200), ct);
-                if (ct.IsCancellationRequested) return;
-                PrevInfo.Text = head + $"{Format.Size(it.Entry.Size)} · {z.Count} entries, {Format.Size(z.Bytes)} uncompressed";
-                PrevText.Text = string.Join('\n', z.Names);
-                return;
-            }
-            if (ImageExt.Contains(it.Entry.Extension.ToLowerInvariant()) && it.Entry.Size < 40_000_000)
-            {
-                var bmp = await Task.Run(() => { try { using var fs = File.OpenRead(it.FullPath); return Avalonia.Media.Imaging.Bitmap.DecodeToWidth(fs, 480); } catch { return null; } }, ct);
-                if (!ct.IsCancellationRequested && bmp != null) { PrevImage.Source = bmp; PrevImage.IsVisible = true; PrevGlyph.IsVisible = false; return; }
-            }
-            if (it.Entry.Size < 1_000_000)
-            {
-                var text = await Task.Run(() => ReadText(it.FullPath));
-                if (!ct.IsCancellationRequested && text != null) PrevText.Text = text;
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch { }
-    }
-
-    static readonly HashSet<string> ImageExt = new() { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".ico" };
-
-    static string? ReadText(string path)
-    {
-        try
-        {
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var buf = new byte[Math.Min(65536, fs.Length)];
-            var n = fs.Read(buf, 0, buf.Length);
-            if (Array.IndexOf(buf, (byte)0, 0, Math.Min(n, 8000)) >= 0) return null; // binary
-            return string.Join('\n', System.Text.Encoding.UTF8.GetString(buf, 0, n).Split('\n').Take(200).Select(l => l.TrimEnd('\r')));
-        }
-        catch { return null; }
-    }
-
     // ================= keyboard =================
     void Window_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -619,6 +558,7 @@ public partial class MainWindow : Window
         bool onButton = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Button;
         var t = _cur;
         bool h = true;
+        if (HookKeys(e)) { e.Handled = true; return; }
         // Palettes work from text boxes too (e.g. right after searching): Ctrl+P means nothing to a TextBox.
         if (ctrl && !alt && shift && key == Key.P) ShowCommandPalette();
         else if (ctrl && !alt && !shift && key == Key.P) ShowGoToFolder();

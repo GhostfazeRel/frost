@@ -109,7 +109,7 @@ public partial class MainWindow
 
     async void Paste(string? dest = null)
     {
-        dest ??= _cur?.Path;
+        dest ??= ActiveTab?.Path;
         if (dest == null) return;
         var (files, cut) = await ImportClipboard() is { } sys ? sys : (_clip, _clipCut);
         if (files.Count == 0) return;
@@ -140,7 +140,7 @@ public partial class MainWindow
         {
             Ops.Children.Remove(op.Row);
             _history.RecordTransfer(move, done);
-            foreach (var t in _tabs)
+            foreach (var t in AllTabs)
                 if (t.Loaded && (Platform.Same(t.Path, dest) || sources.Any(s => Platform.Same(Path.GetDirectoryName(s), t.Path)))) _ = t.RefreshAsync();
         }
     }
@@ -148,7 +148,7 @@ public partial class MainWindow
     // ================= delete / create / rename =================
     async void DeleteSelection(bool permanent)
     {
-        var t = _cur;
+        var t = ActiveTab;
         var paths = Sel.Select(i => i.FullPath).ToList();
         if (t == null || paths.Count == 0) return;
         try
@@ -168,7 +168,7 @@ public partial class MainWindow
 
     async void NewFolder()
     {
-        var t = _cur;
+        var t = ActiveTab;
         if (t == null || t.SearchQuery != null) return;
         try { var p = FileOperations.CreateFolder(t.Path); _history.RecordCreate(p, true); await t.RefreshAsync(p); await RenamePrompt(p, true); }
         catch (Exception ex) { Notify("Couldn't create folder: " + ex.Message); }
@@ -176,7 +176,7 @@ public partial class MainWindow
 
     async void NewTextFile()
     {
-        var t = _cur;
+        var t = ActiveTab;
         if (t == null || t.SearchQuery != null) return;
         try { var p = FileOperations.CreateFile(t.Path, "New Text Document.txt"); _history.RecordCreate(p, false); await t.RefreshAsync(p); await RenamePrompt(p, false); }
         catch (Exception ex) { Notify("Couldn't create file: " + ex.Message); }
@@ -188,14 +188,14 @@ public partial class MainWindow
         var name = (await Dialogs.Prompt(this, "Rename", old, isDir))?.Trim();
         if (string.IsNullOrEmpty(name) || name == old) return;
         if (!PathUtil.IsValidFileName(name)) { Notify("A file name can't be empty, end with a dot or contain  \\ / : * ? \" < > |"); return; }
-        try { var np = FileOperations.Rename(path, name); _history.RecordRename(path, np); if (_cur != null) await _cur.RefreshAsync(np); } // refuses when the name exists
+        try { var np = FileOperations.Rename(path, name); _history.RecordRename(path, np); if (ActiveTab != null) await ActiveTab.RefreshAsync(np); } // refuses when the name exists
         catch (Exception ex) { Notify("Rename failed: " + ex.Message); }
     }
 
     /// <summary>F2: a prompt for one item, the batch dialog for several.</summary>
     async void RenameSelection()
     {
-        var t = _cur;
+        var t = ActiveTab;
         if (t == null || Sel.Count == 0) return;
         if (Sel.Count == 1) { await RenamePrompt(Sel[0].FullPath, Sel[0].IsDirectory); return; }
         var order = t.Items.Select((it, i) => (it, i)).ToDictionary(x => x.it, x => x.i); // {n} numbering follows the list order
@@ -239,14 +239,14 @@ public partial class MainWindow
         {
             Ops.Children.Remove(op.Row);
             _undoBusy = false;
-            foreach (var t in _tabs) if (t.Loaded) _ = t.RefreshAsync();
+            foreach (var t in AllTabs) if (t.Loaded) _ = t.RefreshAsync();
         }
     }
 
     // ================= ZIP =================
     void CompressSelection()
     {
-        var t = _cur;
+        var t = ActiveTab;
         if (t == null || Sel.Count == 0) return;
         var paths = Sel.Select(i => i.FullPath).ToList();
         var zip = Archives.ZipPathFor(paths, t.Path);
@@ -255,7 +255,7 @@ public partial class MainWindow
 
     void ExtractZip(Item zipItem)
     {
-        var parent = _cur?.Path ?? Path.GetDirectoryName(zipItem.FullPath)!;
+        var parent = ActiveTab?.Path ?? Path.GetDirectoryName(zipItem.FullPath)!;
         var dest = Archives.ExtractFolderFor(zipItem.FullPath, parent);
         _ = RunArchiveOp("Extracting", parent, async (p, ct) => (0, await Archives.ExtractAsync(zipItem.FullPath, dest, p, ct)));
     }
@@ -277,7 +277,7 @@ public partial class MainWindow
         finally
         {
             Ops.Children.Remove(op.Row);
-            foreach (var t in _tabs)
+            foreach (var t in AllTabs)
                 if (t.Loaded && Platform.Same(t.Path, outputParent)) _ = t.RefreshAsync(output != null && (File.Exists(output) || Directory.Exists(output)) ? output : null);
         }
     }
@@ -336,6 +336,7 @@ public partial class MainWindow
             cmds.Add(new("Open selection in new tab", "", () => { foreach (var i in Sel.Where(i => i.IsDirectory).ToList()) NewTab(i.FullPath, activate: false); }));
         if (Sel.Count > 1) cmds.Add(new("Batch rename", "F2", RenameSelection));
         if (Sel.Count > 0) cmds.Add(new("Compress to ZIP", "", CompressSelection));
+        cmds.AddRange(PhotoCommands());
         if (Sel.Count == 1 && Archives.IsZip(Sel[0].Name)) cmds.Add(new("Extract here", "", () => ExtractZip(Sel[0])));
         return cmds;
     }
@@ -376,21 +377,23 @@ public partial class MainWindow
     Point? _dragStart;
     PointerPressedEventArgs? _dragPress; // Avalonia 12 starts a drag from the press, not the move
 
-    void SetUpDragDrop()
+    void SetUpDragDrop() => WireDrag(List, () => _cur);
+
+    void WireDrag(ListBox list, Func<Tab?> tab)
     {
-        List.AddHandler(PointerPressedEvent, (_, e) =>
+        list.AddHandler(PointerPressedEvent, (_, e) =>
         {
-            var start = e.GetCurrentPoint(List).Properties.IsLeftButtonPressed && ItemAt(e.Source) != null;
-            _dragStart = start ? e.GetPosition(List) : null;
+            var start = e.GetCurrentPoint(list).Properties.IsLeftButtonPressed && ItemAt(e.Source) != null;
+            _dragStart = start ? e.GetPosition(list) : null;
             _dragPress = start ? e : null;
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
-        List.AddHandler(PointerMovedEvent, async (_, e) =>
+        list.AddHandler(PointerMovedEvent, async (_, e) =>
         {
-            if (_dragStart is not { } start || _dragPress is not { } press || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed) return;
-            var d = e.GetPosition(List) - start;
+            if (_dragStart is not { } start || _dragPress is not { } press || !e.GetCurrentPoint(list).Properties.IsLeftButtonPressed) return;
+            var d = e.GetPosition(list) - start;
             if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
             (_dragStart, _dragPress) = (null, null);
-            var paths = Sel.Select(i => i.FullPath).ToList();
+            var paths = (tab()?.Selection ?? Array.Empty<Item>()).Select(i => i.FullPath).ToList();
             if (paths.Count == 0) return;
             var data = new DataTransfer();
             data.Add(DataTransferItem.Create(DragFormat, string.Join('\n', paths)));
@@ -402,7 +405,7 @@ public partial class MainWindow
             }
             await DragDrop.DoDragDropAsync(press, data, DragDropEffects.Copy | DragDropEffects.Move);
         }, handledEventsToo: true);
-        AcceptDrops(List, e => ItemAt(e.Source) is { IsDirectory: true } it ? it.FullPath : _cur is { SearchQuery: null } t ? t.Path : null);
+        AcceptDrops(list, e => ItemAt(e.Source) is { IsDirectory: true } it ? it.FullPath : tab() is { SearchQuery: null } t ? t.Path : null);
     }
 
     void AcceptDrops(Control c, Func<DragEventArgs, string?> target)
