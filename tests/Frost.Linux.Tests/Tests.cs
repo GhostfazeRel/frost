@@ -27,6 +27,7 @@ public static class TestApp
         Environment.SetEnvironmentVariable("TMPDIR", root);
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Directory.CreateDirectory(Path.Combine(root, "config")).FullName);
         Environment.SetEnvironmentVariable("XDG_DATA_HOME", Path.Combine(root, "data"));
+        Environment.SetEnvironmentVariable("XDG_CACHE_HOME", Path.Combine(root, "cache")); // thumbnails and undo backups
     }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
