@@ -8,6 +8,8 @@ public sealed record BatchRenameOp(IReadOnlyList<(string From, string To)> Pairs
 public sealed record CreateOp(string Path, bool IsDirectory, Task<string?[]> Print, bool Redoable = true) : UndoOp;
 public sealed record TransferOp(bool Move, IReadOnlyList<TransferredItem> Items, Task<string?[]>? Prints = null) : UndoOp;
 public sealed record RecycleOp(IReadOnlyList<string> Paths) : UndoOp;
+/// <summary>0.4.0: an in-place edit of <paramref name="Path"/> (photo rotate, remove location); <paramref name="Backup"/> holds the original. Undo/redo swap them.</summary>
+public sealed record EditOp(string Path, string Backup, string Label) : UndoOp;
 
 /// <param name="Message">What happened, or why it was refused.</param>
 /// <param name="CanOpenRecycleBin">The App should offer an "Open Recycle Bin" button (deletes can't be undone by Frost).</param>
@@ -89,6 +91,9 @@ public sealed class UndoHistory
         if (list.Length > 0) Push(new TransferOp(move, list, move ? null : PrintAsync(list.Select(i => i.Destination).ToArray())));
     }
     /// <summary>Paths that went to the Recycle Bin. Frost can't restore them itself (see UndoAsync).</summary>
+    /// <summary>0.4.0 contract: record an in-place edit; <paramref name="backup"/> comes from EditBackups.Create before editing. Implemented by the Core task.</summary>
+    public void RecordEdit(string path, string backup, string label) => throw new NotImplementedException();
+
     public void RecordRecycle(IEnumerable<string> paths)
     {
         var list = paths.ToArray();
