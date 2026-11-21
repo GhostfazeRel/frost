@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using Frost.Core;
 namespace Frost.Linux;
@@ -373,24 +374,33 @@ public partial class MainWindow
     // In-app paths travel in our own format; file lists from other apps arrive as DataFormats.Files.
     public static readonly DataFormat<string> DragFormat = DataFormat.CreateStringApplicationFormat("x-frost-paths");
     Point? _dragStart;
+    PointerPressedEventArgs? _dragPress; // Avalonia 12 starts a drag from the press, not the move
 
     void SetUpDragDrop()
     {
         List.AddHandler(PointerPressedEvent, (_, e) =>
-            _dragStart = e.GetCurrentPoint(List).Properties.IsLeftButtonPressed && ItemAt(e.Source) != null ? e.GetPosition(List) : null,
-            Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        {
+            var start = e.GetCurrentPoint(List).Properties.IsLeftButtonPressed && ItemAt(e.Source) != null;
+            _dragStart = start ? e.GetPosition(List) : null;
+            _dragPress = start ? e : null;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         List.AddHandler(PointerMovedEvent, async (_, e) =>
         {
-            if (_dragStart is not { } start || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed) return;
+            if (_dragStart is not { } start || _dragPress is not { } press || !e.GetCurrentPoint(List).Properties.IsLeftButtonPressed) return;
             var d = e.GetPosition(List) - start;
             if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
-            _dragStart = null;
+            (_dragStart, _dragPress) = (null, null);
             var paths = Sel.Select(i => i.FullPath).ToList();
             if (paths.Count == 0) return;
             var data = new DataTransfer();
             data.Add(DataTransferItem.Create(DragFormat, string.Join('\n', paths)));
-            data.Add(DataTransferItem.Create(DataFormat.Text, string.Join('\n', paths)));
-            await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Copy | DragDropEffects.Move);
+            // Real file items too, so other apps (Nautilus, a browser upload, an editor) accept the drop.
+            foreach (var p in paths)
+            {
+                IStorageItem? si = Directory.Exists(p) ? await StorageProvider.TryGetFolderFromPathAsync(p) : await StorageProvider.TryGetFileFromPathAsync(p);
+                if (si != null) data.Add(DataTransferItem.CreateFile(si));
+            }
+            await DragDrop.DoDragDropAsync(press, data, DragDropEffects.Copy | DragDropEffects.Move);
         }, handledEventsToo: true);
         AcceptDrops(List, e => ItemAt(e.Source) is { IsDirectory: true } it ? it.FullPath : _cur is { SearchQuery: null } t ? t.Path : null);
     }
@@ -419,8 +429,10 @@ public partial class MainWindow
     }
 
     // Like Explorer: Shift moves, Ctrl copies, otherwise move on the same drive and copy across drives.
+    // Never move when the source only offers a copy (most other apps do), so their file stays put.
     static bool MoveOnDrop(DragEventArgs e, List<string> paths, string dest) =>
-        e.KeyModifiers.HasFlag(KeyModifiers.Shift) || (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && paths.All(p => Platform.SameDrive(p, dest)));
+        e.DragEffects.HasFlag(DragDropEffects.Move) &&
+        (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && paths.All(p => Platform.SameDrive(p, dest))));
 
     internal void DropInto(List<string> paths, string dest, bool move)
     {

@@ -93,7 +93,7 @@ public class FeatureTests
         w.KeyPress(Key.F2, RawInputModifiers.None, PhysicalKey.F2, null);
         var dlg = Owned(w);
         Pump(200);
-        dlg.GetVisualDescendants().OfType<TextBox>().First(t => t.Watermark == "Prefix").Text = "x_";
+        dlg.GetVisualDescendants().OfType<TextBox>().First(t => t.PlaceholderText == "Prefix").Text = "x_";
         var ok = dlg.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Rename");
         Assert.True(WaitFor(() => ok.IsEnabled), "rename never became possible: " + string.Join(" | ", dlg.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)));
         ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -145,11 +145,11 @@ public class FeatureTests
         w.Close();
     }
 
-    static void Drop(ListBox list, Interactive target, string[] paths, KeyModifiers mods)
+    static void Drop(ListBox list, Interactive target, string[] paths, KeyModifiers mods, DragDropEffects allowed = DragDropEffects.Copy | DragDropEffects.Move)
     {
         var data = new DataTransfer();
         data.Add(DataTransferItem.Create(MainWindow.DragFormat, string.Join('\n', paths)));
-        target.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, data, target, new Point(1, 1), mods));
+        target.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, data, target, new Point(1, 1), mods) { DragEffects = allowed });
         Pump(300);
     }
 
@@ -164,6 +164,12 @@ public class FeatureTests
         sub = (Interactive)list.ContainerFromItem(ItemNamed(list, "sub"))!;
         Drop(list, sub, new[] { Path.Combine(d, "b.txt") }, KeyModifiers.Control);
         Assert.True(WaitFor(() => File.Exists(Path.Combine(d, "sub", "b.txt")) && File.Exists(Path.Combine(d, "b.txt"))), "Ctrl drop should copy");
+
+        // A source that only offers a copy (most other apps) keeps its file, even on the same drive.
+        File.WriteAllText(Path.Combine(d, "c.txt"), "c");
+        sub = (Interactive)list.ContainerFromItem(ItemNamed(list, "sub"))!;
+        Drop(list, sub, new[] { Path.Combine(d, "c.txt") }, KeyModifiers.None, DragDropEffects.Copy);
+        Assert.True(WaitFor(() => File.Exists(Path.Combine(d, "sub", "c.txt")) && File.Exists(Path.Combine(d, "c.txt"))), "copy-only source must not be moved");
 
         // A folder dropped onto itself is refused, nothing changes.
         sub = (Interactive)list.ContainerFromItem(ItemNamed(list, "sub"))!;

@@ -24,7 +24,7 @@
             <TextBox x:Name="AddressBox" IsVisible="False"/>
           </Grid>
         </Border>
-        <TextBox x:Name="SearchBox" Grid.Column="5" Watermark="Filter (Enter searches subfolders)"/>
+        <TextBox x:Name="SearchBox" Grid.Column="5" PlaceholderText="Filter (Enter searches subfolders)"/>
       </Grid>
       <!-- toolbar -->
       <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="2" Margin="0,0,0,6">

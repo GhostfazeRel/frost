@@ -78,10 +78,10 @@ public static class Dialogs
     {
         var w = new Window
         {
-            Width = 560, Height = 420, SystemDecorations = SystemDecorations.BorderOnly, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Width = 560, Height = 420, WindowDecorations = WindowDecorations.BorderOnly, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false, Background = Res("MenuBg"),
         };
-        var box = new TextBox { Watermark = placeholder, Margin = new Thickness(12, 12, 12, 6) };
+        var box = new TextBox { PlaceholderText = placeholder, Margin = new Thickness(12, 12, 12, 6) };
         var list = new ListBox { Background = Brushes.Transparent, Margin = new Thickness(6, 0, 6, 6) };
         list.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Row>((r, _) =>
         {
@@ -130,7 +130,7 @@ public static class Dialogs
     {
         var w = Base($"Rename {paths.Count} items", 560);
         IReadOnlyList<(string, string)> applied = Array.Empty<(string, string)>();
-        TextBox T(string text = "", string mark = "") => new() { Text = text, Watermark = mark, MinWidth = 60 };
+        TextBox T(string text = "", string mark = "") => new() { Text = text, PlaceholderText = mark, MinWidth = 60 };
         var find = T(mark: "Find"); var repl = T(mark: "Replace with ({n} = number)");
         var prefix = T(mark: "Prefix"); var suffix = T(mark: "Suffix");
         prefix.Width = suffix.Width = 256; // side by side across the 520 px content width

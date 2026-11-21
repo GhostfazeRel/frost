@@ -45,9 +45,10 @@ You can switch later from the "⋯" menu: "Make Frost the default file manager" 
 Setting the default uses `xdg-mime` (folders, `inode/directory`), so it works in any desktop that follows the
 freedesktop standard (GNOME, KDE, Hyprland, niri, Sway, …).
 
-Works with other file managers: copy/cut in Frost and paste in Nautilus, Dolphin, Thunar and others (or the other way round);
-drag files onto a folder, empty space or a sidebar place (Shift moves, Ctrl copies, otherwise move on the same drive and
-copy across drives). Dragging to or from other apps isn't supported yet (Avalonia on X11).
+Works with other apps: copy/cut in Frost and paste in Nautilus, Dolphin, Thunar and others (or the other way round),
+and drag files between Frost and other apps in both directions. Inside Frost, drag onto a folder, empty space or a sidebar
+place: Shift moves, Ctrl copies, otherwise it moves on the same drive and copies across drives. Files dragged in from an
+app that only offers a copy are always copied, so the original stays where it was.
 
 Needs: x64 Linux with X11 or XWayland, `gio` (glib2) for the trash, `xdg-utils`. Settings are in `~/.config/frost`.
 Delete moves to the trash; where a drive has no trash (e.g. `/tmp`), Frost refuses and Shift+Delete deletes permanently.
@@ -75,7 +76,7 @@ The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-
 - `src/Frost.Core` – listing, sorting, search, copy/move/delete (cross-platform, unit tested)
 - `src/Frost.Shell` – Win32 interop: icons, thumbnails, native context menu, recycle bin, clipboard, acrylic
 - `src/Frost.App` – WPF UI (Windows)
-- `src/Frost.Linux` – Avalonia UI and Linux integration (trash via gio, xdg-open, xdg-mime)
+- `src/Frost.Linux` – Avalonia 12 UI and Linux integration (trash via gio, xdg-open, xdg-mime)
 - `packaging/linux` – Linux installer, uninstaller and release build script
 
 ## Shortcuts
