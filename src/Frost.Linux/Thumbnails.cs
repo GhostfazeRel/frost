@@ -81,6 +81,7 @@ public static class Thumbnails
 
     static void Save(string target, byte[] data)
     {
+        if (OperatingSystem.IsWindows()) return; // Frost.Linux only runs on Linux; this satisfies the platform analyzer
         var dir = Path.GetDirectoryName(target)!;
         var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
         if (!Directory.Exists(dir)) { Directory.CreateDirectory(Path.GetDirectoryName(dir)!, mode); Directory.CreateDirectory(dir, mode); }
