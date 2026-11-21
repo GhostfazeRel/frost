@@ -115,6 +115,36 @@ public class FeatureTests
         w.Close();
     }
 
+    [AvaloniaFact]
+    public void CtrlP_works_from_the_search_box()
+    {
+        var (w, _, _) = Open();
+        var search = w.FindControl<TextBox>("SearchBox")!;
+        search.Focus();
+        search.Text = "zzz";
+        Pump(200);
+        w.KeyPress(Key.P, RawInputModifiers.Control, PhysicalKey.P, "p");
+        Assert.True(WaitFor(() => w.OwnedWindows.Count > 0), "Go to folder did not open from the search box");
+        foreach (var o in w.OwnedWindows.ToList()) o.Close();
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public void Clicking_empty_space_clears_the_selection_and_focuses_the_list()
+    {
+        var (w, list, _) = Open();
+        Select(list, "a.txt", "b.txt");
+        w.FindControl<TextBox>("SearchBox")!.Focus();
+        // Bottom of the list, well below the three rows.
+        var p = list.TranslatePoint(new Point(list.Bounds.Width / 2, list.Bounds.Height - 10), w)!.Value;
+        w.MouseDown(p, MouseButton.Left, RawInputModifiers.None);
+        w.MouseUp(p, MouseButton.Left, RawInputModifiers.None);
+        Pump(200);
+        Assert.Empty(list.SelectedItems!);
+        Assert.True(list.IsKeyboardFocusWithin, $"focus stayed in the search box (focusable={list.Focusable}, focused={TopLevel.GetTopLevel(w)!.FocusManager!.GetFocusedElement()?.GetType().Name}, active={w.IsActive})");
+        w.Close();
+    }
+
     static void Drop(ListBox list, Interactive target, string[] paths, KeyModifiers mods)
     {
         var data = new DataTransfer();

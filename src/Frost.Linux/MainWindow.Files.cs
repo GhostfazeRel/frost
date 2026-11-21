@@ -67,7 +67,7 @@ public partial class MainWindow
         data.Add(DataTransferItem.Create(GnomeFiles, System.Text.Encoding.UTF8.GetBytes((cut ? "cut\n" : "copy\n") + string.Join("\n", uris))));
         data.Add(DataTransferItem.Create(UriList, System.Text.Encoding.UTF8.GetBytes(string.Join("\r\n", uris) + "\r\n")));
         data.Add(DataTransferItem.Create(DataFormat.Text, string.Join("\n", paths)));
-        try { await Clipboard.SetDataAsync(data); } catch { } // the in-app copy still works
+        try { await Clipboard.SetDataAsync(data); } catch (Exception ex) { Console.Error.WriteLine("clipboard export failed: " + ex); } // the in-app copy still works
     }
 
     /// <summary>Files on the system clipboard (from Frost or another file manager), or null.</summary>
@@ -90,7 +90,7 @@ public partial class MainWindow
                 if (files.Count > 0) return (files, false);
             }
         }
-        catch { }
+        catch (Exception ex) { Console.Error.WriteLine("clipboard import failed: " + ex); }
         return null;
     }
 

@@ -72,7 +72,8 @@ public partial class MainWindow : Window
         }
         List.SelectionChanged += (_, _) => OnSelectionChanged();
         List.DoubleTapped += (_, e) => { if (ItemAt(e.Source) is { } it) Open(it, e.KeyModifiers.HasFlag(KeyModifiers.Control)); };
-        List.PointerPressed += List_PointerPressed;
+        // handledEventsToo: the ListBox marks clicks on empty space handled, so we would never see them.
+        List.AddHandler(PointerPressedEvent, List_PointerPressed, RoutingStrategies.Bubble, handledEventsToo: true);
         SetUpDragDrop();
         List.PointerReleased += List_PointerReleased;
         List.PointerWheelChanged += (_, e) =>
@@ -81,7 +82,7 @@ public partial class MainWindow : Window
             _s.IconSize = Math.Clamp(_s.IconSize + (e.Delta.Y > 0 ? 8 : -8), 40, 192); ApplyView(); e.Handled = true;
         };
         Crumbs.SizeChanged += (_, _) => CrumbScroll.ScrollToEnd();
-        Opened += (_, _) => List.Focus();
+        Opened += (_, _) => FocusList();
         AddHandler(KeyDownEvent, Window_KeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, (object? _, PointerPressedEventArgs e) =>
         {
@@ -240,7 +241,7 @@ public partial class MainWindow : Window
 
     void AddressKey(object? s, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape) { EndAddressEdit(); List.Focus(); e.Handled = true; }
+        if (e.Key == Key.Escape) { EndAddressEdit(); FocusList(); e.Handled = true; }
         else if (e.Key == Key.Enter)
         {
             e.Handled = true;
@@ -253,15 +254,15 @@ public partial class MainWindow : Window
                 else if (File.Exists(text)) OpenPath(text);
                 else Notify($"Can't find \"{text}\".");
             }
-            List.Focus();
+            FocusList();
         }
     }
 
     void SearchKey(object? s, KeyEventArgs e)
     {
         if (_cur == null) return;
-        if (e.Key == Key.Enter) { _cur.StartSearch(SearchBox.Text ?? ""); e.Handled = true; List.Focus(); }
-        else if (e.Key == Key.Escape) { SearchBox.Text = ""; _cur.CancelSearch(); e.Handled = true; List.Focus(); }
+        if (e.Key == Key.Enter) { _cur.StartSearch(SearchBox.Text ?? ""); e.Handled = true; FocusList(); }
+        else if (e.Key == Key.Escape) { SearchBox.Text = ""; _cur.CancelSearch(); e.Handled = true; FocusList(); }
     }
 
     // ================= sidebar =================
@@ -387,7 +388,7 @@ public partial class MainWindow : Window
             if (items.Count > 0) List.ScrollIntoView(items[0]);
         }
         UpdateStatus();
-        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox) List.Focus();
+        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox) FocusList();
     }
 
     void UpdateStatus()
@@ -406,6 +407,13 @@ public partial class MainWindow : Window
         UpdatePreview();
     }
 
+    /// <summary>The ListBox itself can't take focus, so focus its selected (or first) row, or the window when empty.</summary>
+    void FocusList()
+    {
+        var i = List.SelectedIndex >= 0 ? List.SelectedIndex : 0;
+        if (List.ContainerFromIndex(i) is not Control c || !c.Focus()) Focus();
+    }
+
     static Item? ItemAt(object? source) => (source as Visual)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault()?.DataContext as Item;
 
     void List_PointerPressed(object? s, PointerPressedEventArgs e)
@@ -419,7 +427,11 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
         else if (p.IsMiddleButtonPressed && it is { IsDirectory: true }) { NewTab(it.FullPath, activate: false); e.Handled = true; }
-        else if (p.IsLeftButtonPressed && it == null && e.KeyModifiers == KeyModifiers.None) List.SelectedItems!.Clear();
+        else if (p.IsLeftButtonPressed && it == null)
+        {
+            FocusList(); // empty space doesn't focus the list by itself; without this, keys stay in the search box
+            if (e.KeyModifiers == KeyModifiers.None) List.SelectedItems!.Clear();
+        }
     }
 
     void List_PointerReleased(object? s, PointerReleasedEventArgs e)
@@ -607,8 +619,9 @@ public partial class MainWindow : Window
         bool onButton = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Button;
         var t = _cur;
         bool h = true;
-        if (!inText && ctrl && !alt && shift && key == Key.P) ShowCommandPalette();
-        else if (!inText && ctrl && !alt && !shift && key == Key.P) ShowGoToFolder();
+        // Palettes work from text boxes too (e.g. right after searching): Ctrl+P means nothing to a TextBox.
+        if (ctrl && !alt && shift && key == Key.P) ShowCommandPalette();
+        else if (ctrl && !alt && !shift && key == Key.P) ShowGoToFolder();
         else if (ctrl && !alt && !shift && key == Key.T) NewTab();
         else if (ctrl && !alt && shift && key == Key.T) ReopenClosedTab();
         else if (ctrl && !alt && !shift && key == Key.W) CloseTab(t);

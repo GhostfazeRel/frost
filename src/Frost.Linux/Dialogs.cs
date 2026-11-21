@@ -133,6 +133,7 @@ public static class Dialogs
         TextBox T(string text = "", string mark = "") => new() { Text = text, Watermark = mark, MinWidth = 60 };
         var find = T(mark: "Find"); var repl = T(mark: "Replace with ({n} = number)");
         var prefix = T(mark: "Prefix"); var suffix = T(mark: "Suffix");
+        prefix.Width = suffix.Width = 256; // side by side across the 520 px content width
         var start = T("1"); var step = T("1"); var width = T("1");
         var rx = new CheckBox { Content = "Regex" }; var mc = new CheckBox { Content = "Match case" }; var ext = new CheckBox { Content = "Include extension" };
         var casing = new ComboBox { ItemsSource = new[] { "Keep case", "lower", "UPPER", "Title Case" }, SelectedIndex = 0 };
