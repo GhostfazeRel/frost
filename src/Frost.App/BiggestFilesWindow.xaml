@@ -80,7 +80,7 @@
                                 <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SizeText}" TextAlignment="Right" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
                             </GridViewColumn>
                             <GridViewColumn Header="Folder" Width="300">
-                                <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Folder}" TextTrimming="CharacterStartEllipsis" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
+                                <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Folder}" TextTrimming="CharacterEllipsis" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
                             </GridViewColumn>
                             <GridViewColumn Header="Modified" Width="130">
                                 <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding ModifiedText}" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>

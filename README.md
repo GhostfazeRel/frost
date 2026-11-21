@@ -25,7 +25,7 @@ Known limits: Remove location clears the EXIF GPS data, not XMP location tags so
 - **Command palette and Go to folder.** Ctrl+Shift+P searches every Frost command by typing a few letters, with its shortcut shown. Ctrl+P jumps to any recent, pinned, drive or nearby folder, or paste a full path; Enter opens it here, Ctrl+Enter in a new tab.
 
 ## Install (Windows)
-Download `Frost-Setup-0.4.0.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest) and run it.
+Download `Frost-Setup-0.4.1.exe` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest) and run it.
 It installs just for you into `%LocalAppData%\Programs\Frost` (no admin rights, no .NET needed), adds a Start menu shortcut
 and an entry in Settings > Apps. "Run without installing" starts Frost straight from the setup file.
 Requires Windows 10/11 x64 (the acrylic glass effect needs Windows 11).
@@ -44,10 +44,10 @@ To undo: "…" menu > "Restore Explorer as default", or uninstall Frost. Both re
 whatever another app (e.g. Files) had set before.
 
 ## Linux
-Download `Frost-Linux-0.4.0-x64.tar.gz` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest), then:
+Download `Frost-Linux-0.4.1-x64.tar.gz` from the [latest release](https://github.com/GhostfazeRel/frost/releases/latest), then:
 
-    tar -xzf Frost-Linux-0.4.0-x64.tar.gz
-    cd Frost-Linux-0.4.0-x64
+    tar -xzf Frost-Linux-0.4.1-x64.tar.gz
+    cd Frost-Linux-0.4.1-x64
     ./install.sh
 
 It installs just for you (no root, no .NET needed) into `~/.local/share/frost`, adds Frost to your app launcher and a
@@ -82,7 +82,7 @@ The setup then reopens with your current options. Check by hand anytime: "…" m
 Linux: `dotnet test tests/Frost.Linux.Tests` (runs headless) and `packaging/linux/build.sh`, which writes
 `dist/Frost-Linux-<version>-x64.tar.gz`. Run from source: `dotnet run --project src/Frost.Linux`.
 
-The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-0.4.0.exe` (a file name containing "setup", or the `--install` argument, starts the installer).
+The Windows release asset is that same `dist/Frost.exe` renamed to `Frost-Setup-0.4.1.exe` (a file name containing "setup", or the `--install` argument, starts the installer).
 
 ## Layout
 - `src/Frost.Core` – listing, sorting, search, copy/move/delete (cross-platform, unit tested)
@@ -110,7 +110,7 @@ Space Quick Look · Ctrl+\\ split view · F6 switch side · F5 copy to other sid
 9. Search: type to filter, Enter for recursive search, Esc to cancel.
 10. Sidebar: quick access, pin a folder, drives with usage bars; preview pane (Alt+P) for an image, a .txt and a folder.
 11. Close and reopen: tabs, window size and view restored.
-12. Install: run `Frost-Setup-0.4.0.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
+12. Install: run `Frost-Setup-0.4.1.exe`, Install with defaults -> Frost starts from `%LocalAppData%\Programs\Frost`, Start menu shortcut works, Frost listed in Settings > Apps. Run setup again while Frost is open -> friendly "close Frost" message.
 13. Default file manager: tick it in setup (or accept the first-run question, or use the … menu). Double-click a folder on the desktop, open a drive in This PC, press Win+E -> all open in Frost. Recycle Bin and Control Panel still open in Explorer. An offline `\\server\share` opens Frost with a "Couldn't open" notice (no Frost/Explorer loop). With Files app set as default first, enabling then restoring Frost gives Files back folders and Win+E.
 14. "Restore Explorer as default" in the … menu -> folders, drives and Win+E open in Explorer again.
 15. Uninstall from Settings > Apps -> confirm dialog; shortcuts, the Apps entry and the install folder are gone, Explorer is the default again, `%AppData%\Frost` is still there.

@@ -10,7 +10,7 @@
                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Button x:Name="BackButton" Style="{StaticResource IconButton}" Content="&#xE72B;" Click="Back_Click" ToolTip="Back" AutomationProperties.Name="Back to the previous folder"/>
-                <TextBlock x:Name="TitleText" Grid.Column="1" Margin="10,0" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterStartEllipsis"/>
+                <TextBlock x:Name="TitleText" Grid.Column="1" Margin="10,0" VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                 <Button x:Name="StopButton" Grid.Column="2" Style="{StaticResource PillButton}" Height="28" Padding="12,0" Content="Cancel scan" Click="Stop_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
                 <Button Grid.Column="3" Style="{StaticResource PillButton}" Height="28" Padding="12,0" Content="Back to files" Click="Close_Click" AutomationProperties.Name="Close space analyzer"/>
             </Grid>

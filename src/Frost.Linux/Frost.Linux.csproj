@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Frost</AssemblyName>
     <RootNamespace>Frost.Linux</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>

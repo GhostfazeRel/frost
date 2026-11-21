@@ -373,7 +373,7 @@
                         <Grid Margin="2,0,2,6">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Click="SplitUp_Click" ToolTip="Up one level" AutomationProperties.Name="Up one level (other side)"/>
-                            <TextBlock Grid.Column="1" Text="{Binding SplitTab.Path}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterStartEllipsis" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SplitTab.Path}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextSecondaryBrush}"/>
                         </Grid>
                         <ListView x:Name="SplitList" Grid.Row="1" ItemsSource="{Binding SplitTab.Items}" SelectionMode="Extended"
                                   Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextBrush}"

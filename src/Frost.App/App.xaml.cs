@@ -73,5 +73,10 @@ public partial class App : Application
         }
         catch { }
         e.Handled = true; // keep the window alive; details are in %AppData%\Frost\crash.log
+        if (Current?.MainWindow is { IsVisible: true }) return;
+        // Failed before any window appeared: with OnExplicitShutdown we'd otherwise linger invisibly in Task Manager.
+        MessageBox.Show($"Frost couldn't start.\n\n{e.Exception.GetBaseException().Message}\n\nDetails: %AppData%\\Frost\\crash.log",
+            "Frost", MessageBoxButton.OK, MessageBoxImage.Error);
+        Current?.Shutdown(1);
     }
 }
