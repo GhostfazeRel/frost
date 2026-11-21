@@ -513,4 +513,28 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- ===== plain list row used by the 0.4.0 tool windows ===== -->
+    <Style x:Key="PlainRow" TargetType="ListViewItem">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Border x:Name="Bd" CornerRadius="9" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" SnapsToDevicePixels="True">
+                        <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}" Content="{TemplateBinding Content}" VerticalAlignment="Center" Margin="4,0"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/></Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBrush}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentRimBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

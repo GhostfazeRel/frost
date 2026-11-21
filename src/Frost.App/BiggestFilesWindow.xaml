@@ -1,0 +1,94 @@
+<Window x:Class="Frost.App.BiggestFilesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+        Width="1100" Height="700" ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
+        FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{StaticResource TextBrush}" Title="Biggest files on every drive"
+        PreviewKeyDown="Window_PreviewKeyDown" Loaded="Window_Loaded" Closed="Window_Closed">
+    <Border Margin="24" CornerRadius="20" Background="{StaticResource MenuBgBrush}" BorderBrush="{StaticResource RimBrush}" BorderThickness="1">
+        <Border.Effect><DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.5" Color="Black"/></Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Grid Margin="20,16,14,10" MouseLeftButtonDown="Header_Down">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Biggest files on every drive" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Grid.Column="1" Margin="16,0" VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                <Button x:Name="StopButton" Grid.Column="2" Style="{StaticResource PillButton}" Height="30" Padding="14,0" Content="Cancel" Click="Stop_Click"/>
+                <Button x:Name="RescanButton" Grid.Column="3" Style="{StaticResource PillButton}" Height="30" Padding="14,0" Margin="8,0,0,0" Content="Scan again" Click="Rescan_Click"/>
+                <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE711;" Margin="8,0,0,0" Click="Close_Click" ToolTip="Close (Esc)" AutomationProperties.Name="Close"/>
+            </Grid>
+            <Grid Grid.Row="1" Margin="14,0,14,16">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="300"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <ListBox x:Name="DriveList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="DriveList_SelectionChanged" AutomationProperties.Name="Drives">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Margin" Value="0,0,0,6"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="12" Padding="12,10" Background="{StaticResource SubtleFillBrush}" BorderBrush="Transparent" BorderThickness="1">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/></Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBrush}"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentRimBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Visibility="{Binding BarVisibility}" Margin="0,6,0,0">
+                                    <ProgressBar Height="4" Value="{Binding UsedPercent, Mode=OneWay}"/>
+                                    <TextBlock Text="{Binding FreeText}" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <ListView x:Name="FileList" Grid.Column="2" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextBrush}"
+                          ItemContainerStyle="{StaticResource PlainRow}" FocusVisualStyle="{x:Null}" SelectionMode="Single"
+                          VirtualizingPanel.IsVirtualizing="True" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          MouseLeftButtonUp="FileList_Click" MouseRightButtonUp="FileList_RightUp" PreviewMouseRightButtonDown="FileList_RightDown"
+                          AutomationProperties.Name="Biggest files">
+                    <ListView.View>
+                        <GridView AllowsColumnReorder="False" ColumnHeaderContainerStyle="{StaticResource DetailsHeader}">
+                            <GridViewColumn Header="Name" Width="250">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Image Source="{Binding Icon}" Width="18" Height="18" Margin="4,0,8,0"/>
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Path}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Size" Width="90">
+                                <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding SizeText}" TextAlignment="Right" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Folder" Width="300">
+                                <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding Folder}" TextTrimming="CharacterStartEllipsis" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Modified" Width="130">
+                                <GridViewColumn.CellTemplate><DataTemplate><TextBlock Text="{Binding ModifiedText}" Margin="6,0" Foreground="{StaticResource TextSecondaryBrush}"/></DataTemplate></GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

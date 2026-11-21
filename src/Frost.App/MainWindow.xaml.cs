@@ -40,7 +40,9 @@ public partial class MainWindow : Window
     }
 
     private MainViewModel Vm => _vm;
-    private ListBox ActiveList => _vm.IsDetails ? DetailsList : IconList;
+    private ListBox LeftList => _vm.IsDetails ? DetailsList : IconList;
+    private ListBox ActiveList => _vm.ActiveIsSplit && _vm.SplitOpen ? SplitList : LeftList;
+    private TabViewModel? TabFor(ListBox lb) => lb == SplitList ? _vm.SplitTab : _vm.CurrentTab;
     private static FontFamily IconFont => (FontFamily)Application.Current.FindResource("IconFont");
 
     // ================= window plumbing =================
@@ -131,7 +133,7 @@ public partial class MainWindow : Window
         var b = RestoreBounds_();
         s.WindowLeft = b.Left; s.WindowTop = b.Top; s.WindowWidth = b.Width; s.WindowHeight = b.Height;
         _vm.SaveState();
-        foreach (var t in _vm.Tabs) t.Dispose();
+        foreach (var t in _vm.AllTabs.ToList()) t.Dispose();
     }
 
     private Rect RestoreBounds_() => WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : base.RestoreBounds;
@@ -172,7 +174,7 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(MainViewModel.ViewMode))
         {
             var old = _lastList;
-            var now = ActiveList;
+            var now = LeftList;
             if (old != null && old != now)
             {
                 var sel = old.SelectedItems.Cast<object>().ToList();
@@ -187,6 +189,7 @@ public partial class MainWindow : Window
         }
         else if (e.PropertyName == "Sort") UpdateHeaders();
         else if (e.PropertyName == nameof(MainViewModel.CurrentTab)) ScrollCrumbs();
+        else if (e.PropertyName is nameof(MainViewModel.ActiveTab) or nameof(MainViewModel.SplitOpen)) UpdateSideVisuals();
     }
 
     private void ScrollCrumbs() => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => CrumbScroll.ScrollToRightEnd()));
@@ -348,6 +351,8 @@ public partial class MainWindow : Window
         AddUndoItems(m);
         m.Items.Add(MI("Show hidden items", "", () => _vm.ShowHidden = !_vm.ShowHidden, "Ctrl+H", true, _vm.ShowHidden));
         m.Items.Add(MI("Preview pane", "", () => _vm.PreviewPane = !_vm.PreviewPane, "Alt+P", true, _vm.PreviewPane));
+        m.Items.Add(MI("Preview pictures on click", null, () => _vm.PreviewOnClick = !_vm.PreviewOnClick, null, true, _vm.PreviewOnClick));
+        AddToolItems(m);
         m.Items.Add(MI("Open terminal here", "", () => _vm.OpenTerminal()));
         m.Items.Add(new Separator());
         m.Items.Add(MI("Copy path", "", _vm.CopyPath, "Ctrl+Shift+C"));
@@ -375,7 +380,7 @@ public partial class MainWindow : Window
     {
         if (sender is not FrameworkElement { DataContext: SidebarItem it }) return;
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0) _vm.OpenInNewTab(it.Path);
-        else if (Directory.Exists(it.Path)) _vm.CurrentTab?.Navigate(it.Path);
+        else if (Directory.Exists(it.Path)) _vm.ActiveTab?.Navigate(it.Path);
         else _vm.Notify($"Can't find \"{it.Path}\".");
     }
 
@@ -388,7 +393,7 @@ public partial class MainWindow : Window
     {
         if (sender is not FrameworkElement { DataContext: SidebarItem it } fe) return;
         var m = new ContextMenu();
-        m.Items.Add(MI("Open", "", () => _vm.CurrentTab?.Navigate(it.Path)));
+        m.Items.Add(MI("Open", "", () => _vm.ActiveTab?.Navigate(it.Path)));
         m.Items.Add(MI("Open in new tab", "", () => _vm.OpenInNewTab(it.Path)));
         if (!it.IsDrive) m.Items.Add(MI(it.IsPinned || _vm.IsPinned(it.Path) ? "Unpin from sidebar" : "Pin to sidebar", "", () => _vm.TogglePin(it.Path)));
         m.Items.Add(MI("Open in terminal", "", () => _vm.OpenTerminal(it.Path)));
@@ -436,25 +441,28 @@ public partial class MainWindow : Window
     // ================= selection =================
     private void List_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender != ActiveList) return;
-        _vm.CurrentTab?.SetSelection(((ListBox)sender).SelectedItems);
-        _vm.UpdatePreview();
+        var lb = (ListBox)sender;
+        if (lb != SplitList && lb != LeftList) return;
+        TabFor(lb)?.SetSelection(lb.SelectedItems);
+        if (lb == ActiveList) _vm.UpdatePreview();
     }
 
     private void OnItemsRebuilt(TabViewModel tab)
     {
-        if (tab != _vm.CurrentTab) return;
+        bool isSplit = tab == _vm.SplitTab;
+        if (tab != _vm.CurrentTab && !isSplit) return;
         var pending = tab.PendingSelect;
         if (pending != null)
         {
             tab.ClearPendingSelect();
-            var list = ActiveList;
+            var list = isSplit ? SplitList : LeftList;
             var items = tab.Items.Where(i => pending.Any(p => Paths.Same(p, i.FullPath))).ToList();
             list.SelectedItems.Clear();
             foreach (var i in items) list.SelectedItems.Add(i);
             if (items.Count > 0) list.ScrollIntoView(items[0]);
         }
-        if (!(Keyboard.FocusedElement is TextBox) && AddressBox.Visibility != Visibility.Visible) FocusList();
+        if (isSplit) return;
+        if (!(Keyboard.FocusedElement is TextBox) && AddressBox.Visibility != Visibility.Visible && !_vm.ActiveIsSplit) FocusList();
         ScrollCrumbs();
     }
 
@@ -478,6 +486,7 @@ public partial class MainWindow : Window
     private void List_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var lb = (ListBox)sender;
+        SetActiveSide(lb == SplitList);
         _dragReady = false; _pendingClick = null; _dragItem = null;
         if (e.OriginalSource is DependencyObject src && FindAncestor<TextBox>(src) != null) return;
         if (e.OriginalSource is DependencyObject s2 && (FindAncestor<ScrollBar>(s2) != null || FindAncestor<GridViewColumnHeader>(s2) != null)) return;
@@ -547,6 +556,7 @@ public partial class MainWindow : Window
     {
         var lb = (ListBox)sender;
         if (e.OriginalSource is DependencyObject d && FindAncestor<TextBox>(d) != null) return;
+        SetActiveSide(lb == SplitList);
         var it = ItemAt(lb, e.OriginalSource);
         if (it == null) lb.UnselectAll();
         else if (!lb.SelectedItems.Contains(it)) { lb.SelectedItems.Clear(); lb.SelectedItems.Add(it); }
@@ -567,7 +577,7 @@ public partial class MainWindow : Window
 
     private void ShowNative(ListBox lb)
     {
-        var t = _vm.CurrentTab;
+        var t = TabFor(lb);
         if (t == null) return;
         var sel = t.Selection;
         try
@@ -586,7 +596,7 @@ public partial class MainWindow : Window
 
     private void ShowFrostMenu(ListBox lb, bool onItem)
     {
-        var t = _vm.CurrentTab;
+        var t = TabFor(lb);
         if (t == null) return;
         var m = new ContextMenu();
         var sel = t.Selection;
@@ -604,6 +614,13 @@ public partial class MainWindow : Window
             m.Items.Add(MI(one != null ? "Rename" : "Rename…", "", RenameSelection, "F2"));
             m.Items.Add(MI("Delete", "", () => _vm.Delete(false), "Del"));
             m.Items.Add(new Separator());
+            AddPhotoItems(m, sel);
+            if (_vm.SplitOpen)
+            {
+                m.Items.Add(MI("Copy to other side", null, () => CopyToOtherSide(false), "F5"));
+                m.Items.Add(MI("Move to other side", null, () => CopyToOtherSide(true)));
+                m.Items.Add(new Separator());
+            }
             m.Items.Add(MI("Compress to ZIP", "", CompressSelection));
             if (one is { IsDirectory: false } && Archives.IsZip(one.Name)) { m.Items.Add(MI("Extract here", "", () => ExtractZip(one, false))); m.Items.Add(MI("Extract to…", "", () => ExtractZip(one, true))); }
             if (one is { IsDirectory: true }) m.Items.Add(MI(_vm.IsPinned(one.FullPath) ? "Unpin from sidebar" : "Pin to sidebar", "", () => _vm.TogglePin(one.FullPath)));
@@ -664,7 +681,7 @@ public partial class MainWindow : Window
     {
         var it = ItemAt(lb, e.OriginalSource);
         if (it is { IsDirectory: true }) return (it.FullPath, it);
-        return (_vm.CurrentTab?.Path, null);
+        return (TabFor(lb)?.Path, null);
     }
 
     private void List_DragOver(object sender, DragEventArgs e)
@@ -776,9 +793,10 @@ public partial class MainWindow : Window
         bool ctrl = (mods & ModifierKeys.Control) != 0, shift = (mods & ModifierKeys.Shift) != 0, alt = (mods & ModifierKeys.Alt) != 0;
         bool inText = Keyboard.FocusedElement is TextBox;
         bool onButton = Keyboard.FocusedElement is ButtonBase;
-        var t = _vm.CurrentTab;
+        var t = _vm.ActiveTab;
         bool h = true;
 
+        if (key == Key.Escape && !ctrl && !alt && Space.Visibility == Visibility.Visible) { CloseSpace(); e.Handled = true; return; }
         if (!inText && ctrl && !alt && shift && key == Key.P) ShowCommandPalette();
         else if (!inText && ctrl && !alt && !shift && key == Key.P) ShowGoToFolder();
         else if (ctrl && !alt && !shift && key == Key.T) _vm.NewTab();
@@ -788,6 +806,9 @@ public partial class MainWindow : Window
         else if ((ctrl && !alt && !shift && key == Key.L) || (alt && !ctrl && key == Key.D) || (!ctrl && !alt && !shift && key == Key.F4)) BeginAddressEdit();
         else if (ctrl && !alt && !shift && (key == Key.F || key == Key.E)) { SearchBox.Focus(); SearchBox.SelectAll(); }
         else if (alt && !ctrl && key == Key.P) _vm.PreviewPane = !_vm.PreviewPane;
+        else if (ctrl && !alt && !shift && (key == Key.Oem5 || key == Key.OemBackslash)) ToggleSplit();
+        else if (!ctrl && !alt && !shift && key == Key.F6 && _vm.SplitOpen) SwitchSide();
+        else if (!ctrl && !alt && !shift && key == Key.F5 && _vm.SplitOpen && !inText) CopyToOtherSide(false);
         else if (alt && !ctrl && key == Key.Left) t?.GoBack();
         else if (alt && !ctrl && key == Key.Right) t?.GoForward();
         else if (alt && !ctrl && key == Key.Up) t?.Up();
@@ -807,6 +828,7 @@ public partial class MainWindow : Window
         else if (!ctrl && !alt && !shift && key == Key.F2) RenameSelection();
         else if (alt && !ctrl && key == Key.Enter) _vm.Properties();
         else if (!ctrl && !alt && !shift && key == Key.Enter && !onButton && ActiveList.IsKeyboardFocusWithin) _vm.OpenSelection();
+        else if (!ctrl && !alt && !shift && key == Key.Space && !onButton && ActiveList.IsKeyboardFocusWithin) ShowQuickLook();
         else if (!ctrl && !alt && !shift && key == Key.Back && !onButton) t?.GoBack();
         else h = false;
 
