@@ -36,6 +36,26 @@ public partial class DialogWindow : Window
         return d._result;
     }
 
+    /// <summary>Asks for one line of text. Returns it, or null when cancelled. Must run on the UI thread.</summary>
+    public static string? Prompt(Window? owner, string title, string message, string initial, string okText)
+    {
+        var d = new DialogWindow();
+        if (owner != null && owner.IsVisible) d.Owner = owner; else d.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        d.TitleText.Text = title;
+        d.MessageText.Text = message;
+        d.Input.Text = initial;
+        d.Input.Visibility = Visibility.Visible;
+        string? result = null;
+        var ok = new Button { Content = okText, MinWidth = 84, Style = (Style)Application.Current.FindResource("AccentPill"), IsDefault = true };
+        ok.Click += (_, _) => { result = d.Input.Text; d.Close(); };
+        var cancel = new Button { Content = "Cancel", MinWidth = 84, Margin = new Thickness(8, 0, 0, 0), Style = (Style)Application.Current.FindResource("PillButton"), IsCancel = true };
+        d.Buttons.Children.Add(ok);
+        d.Buttons.Children.Add(cancel);
+        d.Loaded += (_, _) => { d.Input.Focus(); d.Input.SelectAll(); };
+        d.ShowDialog();
+        return result;
+    }
+
     /// <summary>Runs <paramref name="work"/> behind a progress bar (0-100) with a Cancel button; Esc/close also cancel.
     /// Returns null on success, the exception otherwise (OperationCanceledException when cancelled). Must run on the UI thread.</summary>
     public static Exception? RunWithProgress(Window? owner, string title, string message, Func<IProgress<double>, CancellationToken, Task> work)

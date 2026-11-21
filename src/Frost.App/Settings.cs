@@ -15,6 +15,8 @@ public sealed class AppSettings
     public bool SortDescending { get; set; }
     public bool ShowHidden { get; set; }
     public bool PreviewPane { get; set; }
+    public bool PreviewOnClick { get; set; } = true; // pictures open the preview pane by themselves
+    public double PreviewWidth { get; set; } = 340;
     public double WindowLeft { get; set; }
     public double WindowTop { get; set; }
     public double WindowWidth { get; set; }

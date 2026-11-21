@@ -271,15 +271,15 @@
                     <Button x:Name="NewButton" Style="{StaticResource PillButton}" Click="New_Click" AutomationProperties.Name="New" ToolTip="Create a new item">
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE710;" Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/><TextBlock Text="New" VerticalAlignment="Center"/><TextBlock Style="{StaticResource Glyph}" Text="&#xE70D;" FontSize="9" Margin="8,0,0,0"/></StackPanel>
                     </Button>
-                    <Button Style="{StaticResource PillButton}" Margin="12,0,0,0" Padding="11,0" IsEnabled="{Binding CurrentTab.HasSelection}" Click="Cut_Click" ToolTip="Cut (Ctrl+X)" AutomationProperties.Name="Cut">
+                    <Button Style="{StaticResource PillButton}" Margin="12,0,0,0" Padding="11,0" IsEnabled="{Binding ActiveTab.HasSelection}" Click="Cut_Click" ToolTip="Cut (Ctrl+X)" AutomationProperties.Name="Cut">
                         <TextBlock Style="{StaticResource Glyph}" Text="&#xE8C6;"/></Button>
-                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding CurrentTab.HasSelection}" Click="Copy_Click" ToolTip="Copy (Ctrl+C)" AutomationProperties.Name="Copy">
+                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding ActiveTab.HasSelection}" Click="Copy_Click" ToolTip="Copy (Ctrl+C)" AutomationProperties.Name="Copy">
                         <TextBlock Style="{StaticResource Glyph}" Text="&#xE8C8;"/></Button>
                     <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" Click="Paste_Click" ToolTip="Paste (Ctrl+V)" AutomationProperties.Name="Paste">
                         <TextBlock Style="{StaticResource Glyph}" Text="&#xE77F;"/></Button>
-                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding CurrentTab.HasSelection}" Click="Rename_Click" ToolTip="Rename (F2)" AutomationProperties.Name="Rename">
+                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding ActiveTab.HasSelection}" Click="Rename_Click" ToolTip="Rename (F2)" AutomationProperties.Name="Rename">
                         <TextBlock Style="{StaticResource Glyph}" Text="&#xE8AC;"/></Button>
-                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding CurrentTab.HasSelection}" Click="Delete_Click" ToolTip="Delete (Del)" AutomationProperties.Name="Delete">
+                    <Button Style="{StaticResource PillButton}" Margin="6,0,0,0" Padding="11,0" IsEnabled="{Binding ActiveTab.HasSelection}" Click="Delete_Click" ToolTip="Delete (Del)" AutomationProperties.Name="Delete">
                         <TextBlock Style="{StaticResource Glyph}" Text="&#xE74D;"/></Button>
                     <Button x:Name="SortButton" Style="{StaticResource PillButton}" Margin="12,0,0,0" Click="Sort_Click" AutomationProperties.Name="Sort" ToolTip="Sort by">
                         <StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource Glyph}" Text="&#xE8CB;" Margin="0,0,8,0"/><TextBlock Text="Sort" VerticalAlignment="Center"/><TextBlock Style="{StaticResource Glyph}" Text="&#xE70D;" FontSize="9" Margin="8,0,0,0"/></StackPanel>
@@ -302,7 +302,7 @@
             <Grid Grid.Row="3" Margin="12,0,12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="236"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition x:Name="SplitColumn" Width="0"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Border Style="{StaticResource GlassPanel}" Grid.Column="0" Padding="8">
@@ -311,7 +311,7 @@
                     </ScrollViewer>
                 </Border>
 
-                <Border Style="{StaticResource GlassPanel}" Grid.Column="2" Padding="6">
+                <Border x:Name="MainListBorder" Style="{StaticResource GlassPanel}" Grid.Column="2" Padding="6">
                     <Grid>
                         <ListView x:Name="DetailsList" ItemsSource="{Binding CurrentTab.Items}" SelectionMode="Extended"
                                   Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextBrush}"
@@ -319,7 +319,7 @@
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
                                   ScrollViewer.HorizontalScrollBarVisibility="Auto" TextSearch.TextPath="Name" IsTextSearchEnabled="True"
                                   AllowDrop="True" Visibility="{Binding IsDetails, Converter={StaticResource B2V}}"
-                                  SelectionChanged="List_SelectionChanged" GridViewColumnHeader.Click="Header_Click"
+                                  SelectionChanged="List_SelectionChanged" GotKeyboardFocus="List_GotKeyboardFocus" GridViewColumnHeader.Click="Header_Click"
                                   PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
                                   PreviewMouseMove="List_PreviewMouseMove" PreviewMouseDown="List_PreviewMouseDown"
                                   PreviewMouseRightButtonDown="List_PreviewMouseRightButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp"
@@ -342,7 +342,7 @@
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True"
                                  TextSearch.TextPath="Name" IsTextSearchEnabled="True"
                                  AllowDrop="True" Visibility="{Binding IsIcons, Converter={StaticResource B2V}}"
-                                 SelectionChanged="List_SelectionChanged" PreviewKeyDown="IconList_PreviewKeyDown"
+                                 SelectionChanged="List_SelectionChanged" GotKeyboardFocus="List_GotKeyboardFocus" PreviewKeyDown="IconList_PreviewKeyDown"
                                  PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
                                  PreviewMouseMove="List_PreviewMouseMove" PreviewMouseDown="List_PreviewMouseDown"
                                  PreviewMouseRightButtonDown="List_PreviewMouseRightButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp"
@@ -362,17 +362,75 @@
                             <TextBlock Style="{StaticResource Glyph}" Text="{Binding CurrentTab.OverlayGlyph}" FontSize="44" Foreground="{StaticResource TextTertiaryBrush}"/>
                             <TextBlock Text="{Binding CurrentTab.OverlayText}" Margin="0,12,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360"/>
                         </StackPanel>
+                        <local:SpaceView x:Name="Space" Visibility="Collapsed"/>
+                    </Grid>
+                </Border>
+
+                <!-- ===== split view: second folder ===== -->
+                <Border x:Name="SplitBorder" Style="{StaticResource GlassPanel}" Grid.Column="3" Margin="10,0,0,0" Padding="6" Visibility="Collapsed">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid Margin="2,0,2,6">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Click="SplitUp_Click" ToolTip="Up one level" AutomationProperties.Name="Up one level (other side)"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SplitTab.Path}" VerticalAlignment="Center" Margin="8,0,0,0" TextTrimming="CharacterStartEllipsis" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Grid>
+                        <ListView x:Name="SplitList" Grid.Row="1" ItemsSource="{Binding SplitTab.Items}" SelectionMode="Extended"
+                                  Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextBrush}"
+                                  ItemContainerStyle="{StaticResource DetailsItem}" FocusVisualStyle="{x:Null}"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto" TextSearch.TextPath="Name" IsTextSearchEnabled="True" AllowDrop="True"
+                                  SelectionChanged="List_SelectionChanged" GotKeyboardFocus="List_GotKeyboardFocus"
+                                  PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
+                                  PreviewMouseMove="List_PreviewMouseMove" PreviewMouseDown="List_PreviewMouseDown"
+                                  PreviewMouseRightButtonDown="List_PreviewMouseRightButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp"
+                                  DragOver="List_DragOver" DragLeave="List_DragLeave" Drop="List_Drop"
+                                  AutomationProperties.Name="Files (other side)">
+                            <ListView.View>
+                                <GridView AllowsColumnReorder="False" ColumnHeaderContainerStyle="{StaticResource DetailsHeader}">
+                                    <GridViewColumn Header="Name" Width="260" CellTemplate="{StaticResource NameCell}"/>
+                                    <GridViewColumn Header="Date modified" Width="140" CellTemplate="{StaticResource ModifiedCell}"/>
+                                    <GridViewColumn Header="Size" Width="80" CellTemplate="{StaticResource SizeCell}"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
                     </Grid>
                 </Border>
 
                 <!-- ===== preview pane ===== -->
-                <Border Style="{StaticResource GlassPanel}" Grid.Column="3" Width="300" Margin="10,0,0,0" Padding="18"
-                        DataContext="{Binding Preview}" Visibility="{Binding DataContext.PreviewPane, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource B2V}}">
+                <Thumb x:Name="PreviewGrip" Grid.Column="4" Width="10" Cursor="SizeWE" Focusable="False" AutomationProperties.Name="Resize preview pane"
+                       Visibility="{Binding PreviewOpen, Converter={StaticResource B2V}}" DragDelta="PreviewGrip_DragDelta" DragCompleted="PreviewGrip_DragCompleted">
+                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="Transparent"/></ControlTemplate></Thumb.Template>
+                </Thumb>
+                <Border Style="{StaticResource GlassPanel}" Grid.Column="5" Padding="18"
+                        Width="{Binding DataContext.PreviewWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                        DataContext="{Binding Preview}" Visibility="{Binding DataContext.PreviewOpen, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource B2V}}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
                         <StackPanel>
-                            <Image Source="{Binding Picture}" MaxHeight="200" Stretch="Uniform" HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,10" TextAlignment="Center"/>
-                            <TextBlock Text="{Binding TypeText}" Foreground="{StaticResource TextSecondaryBrush}" TextAlignment="Center" Margin="0,0,0,12"/>
+                            <Image Source="{Binding Picture}" MaxHeight="{Binding PictureMaxHeight}" Stretch="Uniform" HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,4" TextAlignment="Center"/>
+                            <TextBlock Text="{Binding Extra}" Visibility="{Binding HasExtra, Converter={StaticResource B2V}}" Foreground="{StaticResource AccentBrush}" TextAlignment="Center" Margin="0,0,0,6"/>
+                            <Border Visibility="{Binding HasLocation, Converter={StaticResource B2V}}" HorizontalAlignment="Center" CornerRadius="10" Padding="8,2" Margin="0,0,0,6"
+                                    Background="{StaticResource AccentSoftBrush}">
+                                <TextBlock Text="&#x1F4CD; has location" FontSize="12"/>
+                            </Border>
+                            <TextBlock Text="{Binding TypeText}" Foreground="{StaticResource TextSecondaryBrush}" TextAlignment="Center" Margin="0,4,0,12"/>
+                            <ItemsControl ItemsSource="{Binding Swatches}" Visibility="{Binding HasSwatches, Converter={StaticResource B2V}}" Focusable="False" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Width="36" Height="36" Margin="3,0" Background="{Binding Brush}" ToolTip="{Binding Hex}" Cursor="Hand"
+                                                Command="{Binding DataContext.CopyHexCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding Hex}"
+                                                AutomationProperties.Name="{Binding Hex, StringFormat=Copy colour {0}}">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="10" BorderBrush="{StaticResource RimBrush}" BorderThickness="1"/>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -382,6 +440,24 @@
                                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ModifiedText}" TextWrapping="Wrap" Margin="0,3"/>
                                 <TextBlock Grid.Row="2" Text="Created" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,3"/>
                                 <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding CreatedText}" TextWrapping="Wrap" Margin="0,3"/>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,3"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" Margin="0,3"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid Visibility="{Binding HasLocation, Converter={StaticResource B2V}}">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Location" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center" Margin="0,3"/>
+                                <TextBlock Grid.Column="1" Text="{Binding LocationText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,3"/>
+                                <Button Grid.Column="2" Content="Copy" Style="{StaticResource PillButton}" Height="24" Padding="10,0" FontSize="11" Margin="6,0,0,0"
+                                        Command="{Binding CopyLocationCommand}" AutomationProperties.Name="Copy location"/>
                             </Grid>
                             <Border Margin="0,14,0,0" Padding="10" CornerRadius="12" Background="#26000000" Visibility="{Binding HasText, Converter={StaticResource B2V}}">
                                 <TextBlock Text="{Binding TextContent}" FontFamily="Cascadia Mono, Consolas" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="NoWrap"/>
@@ -396,15 +472,15 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding CurrentTab.CountText}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="{Binding CurrentTab.SelectionText}" Margin="18,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ActiveTab.CountText}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding ActiveTab.SelectionText}" Margin="18,0,0,0" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CurrentTab.StatusBusy}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
                     <Button Content="Cancel" Style="{StaticResource PillButton}" Height="22" Padding="10,0" FontSize="11" Margin="8,0,0,0"
                             Command="{Binding CancelSearchCommand}" Visibility="{Binding CurrentTab.IsSearching, Converter={StaticResource B2V}}"/>
                 </StackPanel>
                 <TextBlock Grid.Column="3" Text="{Binding Notice}" Margin="18,0,18,0" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextBrush}"/>
-                <TextBlock Grid.Column="4" Text="{Binding CurrentTab.FreeText}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="4" Text="{Binding ActiveTab.FreeText}" VerticalAlignment="Center"/>
             </Grid>
 
             <!-- ===== operations ===== -->

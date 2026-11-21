@@ -28,6 +28,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (var s in Sections) s.IsExpanded = !settings.CollapsedSections.Contains(s.Title);
         CloseTabCommand = new RelayCommand(o => CloseTab(o as TabViewModel));
         CancelSearchCommand = new RelayCommand(_ => CurrentTab?.CancelSearch());
+        Preview.Notify = Notify;
     }
 
     public AppSettings Settings { get; }
@@ -37,11 +38,36 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<OperationViewModel> Operations { get; } = new();
     public List<SidebarSection> Sections { get; }
     public PreviewViewModel Preview { get; } = new();
+    public TabViewModel? SplitTab { get; private set; }
     public ICommand CloseTabCommand { get; }
     public ICommand CancelSearchCommand { get; }
     public event Action<TabViewModel>? ItemsRebuilt;
 
-    public TabViewModel? CurrentTab { get => _current; private set => Set(ref _current, value); }
+    public TabViewModel? CurrentTab { get => _current; private set { if (Set(ref _current, value)) Raise(nameof(ActiveTab)); } }
+
+    // ---- split view: the "active" tab is the one the keyboard and the file actions work on ----
+    private bool _splitOpen, _activeIsSplit;
+    public bool SplitOpen { get => _splitOpen; private set => Set(ref _splitOpen, value); }
+    public bool ActiveIsSplit { get => _activeIsSplit; set { if (value && SplitTab == null) value = false; if (Set(ref _activeIsSplit, value)) { Raise(nameof(ActiveTab)); UpdatePreview(); } } }
+    public TabViewModel? ActiveTab => _activeIsSplit && SplitTab != null ? SplitTab : CurrentTab;
+    public IEnumerable<TabViewModel> AllTabs => SplitTab == null ? Tabs : Tabs.Concat(new[] { SplitTab });
+
+    public void ToggleSplit()
+    {
+        if (SplitOpen)
+        {
+            ActiveIsSplit = false;
+            var old = SplitTab; SplitTab = null; SplitOpen = false;
+            Raise(nameof(SplitTab)); Raise(nameof(ActiveTab));
+            old?.Dispose();
+            return;
+        }
+        if (CurrentTab == null) return;
+        SplitTab = new TabViewModel(this, CurrentTab.Path);
+        SplitTab.EnsureLoaded();
+        SplitOpen = true;
+        Raise(nameof(SplitTab));
+    }
     public string Notice { get => _notice; private set => Set(ref _notice, value); }
     public double TabWidth { get => _tabWidth; set => Set(ref _tabWidth, value); }
 
@@ -79,11 +105,37 @@ public sealed class MainViewModel : ObservableObject
         set { if (Settings.ShowHidden == value) return; Settings.ShowHidden = value; Raise(); foreach (var t in Tabs) if (t.Loaded) t.Refresh(); }
     }
 
+    /// <summary>Alt+P: the pane is pinned open for every kind of file.</summary>
     public bool PreviewPane
     {
         get => Settings.PreviewPane;
-        set { if (Settings.PreviewPane == value) return; Settings.PreviewPane = value; Raise(); if (value) UpdatePreview(); }
+        set
+        {
+            if (Settings.PreviewPane == value) return;
+            Settings.PreviewPane = value; Raise();
+            // closing the pane while a picture is selected must not re-open it at once
+            if (!value) { _suppressKey = SelectionKey(); AutoPreview = false; }
+            UpdatePreview(); Raise(nameof(PreviewOpen));
+        }
     }
+
+    public bool PreviewOnClick
+    {
+        get => Settings.PreviewOnClick;
+        set { if (Settings.PreviewOnClick == value) return; Settings.PreviewOnClick = value; Raise(); _suppressKey = null; UpdatePreview(); }
+    }
+
+    private bool _autoPreview;
+    private string? _suppressKey;
+    /// <summary>True while the pane is open only because a picture is selected.</summary>
+    public bool AutoPreview { get => _autoPreview; private set { if (Set(ref _autoPreview, value)) Raise(nameof(PreviewOpen)); } }
+    public bool PreviewOpen => PreviewPane || AutoPreview;
+
+    public double PreviewWidth => Settings.PreviewWidth;
+    public void SetPreviewWidth(double w) { Settings.PreviewWidth = Math.Clamp(w, 240, 800); Raise(nameof(PreviewWidth)); }
+
+    private string SelectionKey() => string.Join("|", ActiveTab?.Selection.Select(i => i.FullPath) ?? Array.Empty<string>());
+
 
     public void SetSort(SortColumn col)
     {
@@ -97,7 +149,7 @@ public sealed class MainViewModel : ObservableObject
     private void RaiseSort()
     {
         Raise("Sort");
-        foreach (var t in Tabs) t.Resort();
+        foreach (var t in AllTabs) t.Resort();
     }
 
     // ---- startup / shutdown ----
@@ -125,10 +177,11 @@ public sealed class MainViewModel : ObservableObject
         if (index is int i && i <= Tabs.Count) Tabs.Insert(i, t); else Tabs.Add(t);
     }
 
-    public void NewTab(string? path = null, bool activate = true)
+    public void NewTab(string? path = null, bool activate = true, string? select = null)
     {
         var p = path != null && Directory.Exists(path) ? path : Paths.Home;
         var t = new TabViewModel(this, p);
+        if (select != null) t.PreSelect(select);
         RecentList.Add(Settings.RecentFolders, p);
         AddTab(t);
         if (activate) Activate(t);
@@ -276,7 +329,7 @@ public sealed class MainViewModel : ObservableObject
     private DispatcherTimer? _previewTimer;
     public void UpdatePreview()
     {
-        if (!PreviewPane) return;
+        if (!PreviewPane && !PreviewOnClick && !AutoPreview) return;
         _previewTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         _previewTimer.Tick -= PreviewTick;
         _previewTimer.Tick += PreviewTick;
@@ -286,21 +339,27 @@ public sealed class MainViewModel : ObservableObject
     private void PreviewTick(object? s, EventArgs e)
     {
         _previewTimer?.Stop();
-        Preview.Show(CurrentTab?.Selection ?? Array.Empty<ItemViewModel>(), CurrentTab);
+        var tab = ActiveTab;
+        var sel = tab?.Selection ?? Array.Empty<ItemViewModel>();
+        if (_suppressKey != null && _suppressKey != SelectionKey()) _suppressKey = null;
+        AutoPreview = PreviewOnClick && _suppressKey == null && sel.Count > 0 && sel.All(PictureLoader.IsPicture);
+        if (!PreviewOpen) return;
+        Preview.DecodeWidth = (int)Math.Max(200, (Settings.PreviewWidth - 36) * (Owner is { } w ? System.Windows.Media.VisualTreeHelper.GetDpi(w).DpiScaleX : 1));
+        Preview.Show(sel, tab);
     }
 
     // ---- file actions ----
-    private IReadOnlyList<string> SelectedPaths => CurrentTab?.Selection.Select(i => i.FullPath).ToList() ?? new List<string>();
+    private IReadOnlyList<string> SelectedPaths => ActiveTab?.Selection.Select(i => i.FullPath).ToList() ?? new List<string>();
 
     public void Open(ItemViewModel it, bool newTab = false)
     {
-        if (it.IsDirectory) { if (newTab) OpenInNewTab(it.FullPath); else CurrentTab?.Navigate(it.FullPath); return; }
+        if (it.IsDirectory) { if (newTab) OpenInNewTab(it.FullPath); else ActiveTab?.Navigate(it.FullPath); return; }
         try { ShellActions.Open(it.FullPath); } catch (Exception ex) { Notify("Couldn't open file: " + ex.Message); }
     }
 
     public void OpenSelection()
     {
-        var sel = CurrentTab?.Selection;
+        var sel = ActiveTab?.Selection;
         if (sel == null || sel.Count == 0) return;
         if (sel.Count == 1) { Open(sel[0]); return; }
         foreach (var i in sel) Open(i, newTab: true);
@@ -317,7 +376,7 @@ public sealed class MainViewModel : ObservableObject
     public void CopyPath()
     {
         var p = SelectedPaths;
-        var text = p.Count > 0 ? string.Join("\r\n", p.Select(x => "\"" + x + "\"")) : CurrentTab?.Path;
+        var text = p.Count > 0 ? string.Join("\r\n", p.Select(x => "\"" + x + "\"")) : ActiveTab?.Path;
         if (string.IsNullOrEmpty(text)) return;
         try { Clipboard.SetText(text); Notify("Path copied"); } catch { }
     }
@@ -326,7 +385,7 @@ public sealed class MainViewModel : ObservableObject
 
     public void Paste(string? dest = null)
     {
-        dest ??= CurrentTab?.Path;
+        dest ??= ActiveTab?.Path;
         if (dest == null) return;
         IReadOnlyList<string> files; bool cut;
         try { files = FileClipboard.GetFiles(out cut); } catch (Exception ex) { Notify("Clipboard error: " + ex.Message); return; }
@@ -337,7 +396,7 @@ public sealed class MainViewModel : ObservableObject
 
     public async void Delete(bool permanent)
     {
-        var t = CurrentTab;
+        var t = ActiveTab;
         var paths = SelectedPaths;
         if (t == null || paths.Count == 0 || Owner == null) return;
         try
@@ -357,7 +416,7 @@ public sealed class MainViewModel : ObservableObject
 
     public async void NewFolder()
     {
-        var t = CurrentTab;
+        var t = ActiveTab;
         if (t == null || t.SearchQuery != null) return;
         try { var p = FileOperations.CreateFolder(t.Path); History.RecordCreate(p, true); await t.RefreshAsync(p); t.BeginRename(p); }
         catch (Exception ex) { Notify("Couldn't create folder: " + ex.Message); }
@@ -365,7 +424,7 @@ public sealed class MainViewModel : ObservableObject
 
     public async void NewTextFile()
     {
-        var t = CurrentTab;
+        var t = ActiveTab;
         if (t == null || t.SearchQuery != null) return;
         try { var p = FileOperations.CreateFile(t.Path, "New Text Document.txt"); History.RecordCreate(p, false); await t.RefreshAsync(p); t.BeginRename(p); }
         catch (Exception ex) { Notify("Couldn't create file: " + ex.Message); }
@@ -373,14 +432,14 @@ public sealed class MainViewModel : ObservableObject
 
     public void BeginRenameSelection()
     {
-        var sel = CurrentTab?.Selection;
+        var sel = ActiveTab?.Selection;
         if (sel is { Count: 1 }) sel[0].BeginRename();
     }
 
     /// <summary>Returns false when the name was invalid and the editor should stay open.</summary>
     public async Task<bool> CommitRename(ItemViewModel it, bool lostFocus)
     {
-        var t = CurrentTab;
+        var t = ActiveTab;
         var name = it.EditName.Trim();
         if (name == it.Name || name.Length == 0) { it.IsRenaming = false; return true; }
         if (!PathUtil.IsValidFileName(name))
@@ -397,14 +456,14 @@ public sealed class MainViewModel : ObservableObject
 
     public void Properties(string? path = null)
     {
-        path ??= CurrentTab?.Selection.Count > 0 ? CurrentTab.Selection[0].FullPath : CurrentTab?.Path;
+        path ??= ActiveTab?.Selection.Count > 0 ? ActiveTab.Selection[0].FullPath : ActiveTab?.Path;
         if (path == null) return;
         try { ShellActions.ShowProperties(path); } catch (Exception ex) { Notify(ex.Message); }
     }
 
     public void OpenTerminal(string? folder = null)
     {
-        folder ??= CurrentTab?.Path;
+        folder ??= ActiveTab?.Path;
         if (folder == null) return;
         try { ShellActions.OpenTerminal(folder); } catch (Exception ex) { Notify(ex.Message); }
     }
@@ -439,7 +498,7 @@ public sealed class MainViewModel : ObservableObject
         {
             Operations.Remove(op);
             History.RecordTransfer(move, done);
-            foreach (var t in Tabs)
+            foreach (var t in AllTabs)
                 if (t.Loaded && (Paths.Same(t.Path, dest) || sources.Any(s => Paths.Same(System.IO.Path.GetDirectoryName(s), t.Path)))) _ = t.RefreshAsync();
         }
     }

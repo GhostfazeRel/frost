@@ -54,6 +54,7 @@ public partial class MainWindow
             new("Sort descending", "", () => _vm.SetSortDirection(true)),
             new(_vm.ShowHidden ? "Hide hidden items" : "Show hidden items", "Ctrl+H", () => _vm.ShowHidden = !_vm.ShowHidden),
             new(_vm.PreviewPane ? "Hide preview pane" : "Show preview pane", "Alt+P", () => _vm.PreviewPane = !_vm.PreviewPane),
+            new(_vm.PreviewOnClick ? "Turn off preview pictures on click" : "Turn on preview pictures on click", "", () => _vm.PreviewOnClick = !_vm.PreviewOnClick),
             new(t != null && _vm.IsPinned(t.Path) ? "Unpin this folder from sidebar" : "Pin this folder to sidebar", "", () => { if (_vm.CurrentTab is { } c) _vm.TogglePin(c.Path); }),
             new(isDefault ? "Restore Explorer as default" : "Make Frost the default file manager", "", () =>
             {
@@ -64,6 +65,8 @@ public partial class MainWindow
         };
         if (t != null && t.Selection.Any(i => i.IsDirectory))
             cmds.Add(new("Open selection in new tab", "", () => { foreach (var i in _vm.CurrentTab!.Selection.Where(i => i.IsDirectory).ToList()) _vm.OpenInNewTab(i.FullPath); }));
+        AddToolCommands(cmds);
+        AddPhotoCommands(cmds);
         cmds.Add(new("Undo", "Ctrl+Z", () => _ = UndoAsync()));
         cmds.Add(new("Redo", "Ctrl+Y", () => _ = RedoAsync()));
         if (t != null && t.Selection.Count > 1) cmds.Add(new("Batch rename", "F2", RenameSelection));

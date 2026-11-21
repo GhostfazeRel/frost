@@ -113,6 +113,17 @@ public sealed class TabViewModel : ObservableObject, IDisposable
     }
     public void Refresh() { _ = LoadAsync(); }
     public Task RefreshAsync(string? select = null) => LoadAsync(select, quiet: true);
+    /// <summary>Reloads and selects all of <paramref name="select"/> (e.g. the files a photo tool just wrote).</summary>
+    public Task RefreshSelectAsync(IReadOnlyList<string> select) => LoadAsync(null, quiet: true, selectMany: select);
+    /// <summary>Selects this file once the first listing is done (a new tab that reveals a file).</summary>
+    public void PreSelect(string path) => _pendingSelect = new List<string> { path };
+    /// <summary>Goes to <paramref name="folder"/> and selects <paramref name="select"/> in it.</summary>
+    public void NavigateSelect(string folder, string select)
+    {
+        if (!Directory.Exists(folder)) { _main.Notify($"Can't find \"{folder}\"."); return; }
+        if (!Paths.Same(folder, Path)) _history.Navigate(folder);
+        AfterNav(select);
+    }
 
     private void AfterNav(string? select)
     {
@@ -138,12 +149,13 @@ public sealed class TabViewModel : ObservableObject, IDisposable
     }
 
     // ---- listing ----
-    public async Task LoadAsync(string? select = null, bool quiet = false)
+    public async Task LoadAsync(string? select = null, bool quiet = false, IReadOnlyList<string>? selectMany = null)
     {
         _listCts?.Cancel();
         var cts = _listCts = new CancellationTokenSource();
         var oldThumb = _thumbCts; _thumbCts = new CancellationTokenSource(); oldThumb?.Cancel();
-        if (select != null) _pendingSelect = new List<string> { select };
+        if (selectMany != null) _pendingSelect = selectMany.ToList();
+        else if (select != null) _pendingSelect = new List<string> { select };
         else if (quiet && Selection.Count > 0) _pendingSelect = Selection.Select(s => s.FullPath).ToList();
         if (!quiet) IsLoading = true;
         _error = null;
