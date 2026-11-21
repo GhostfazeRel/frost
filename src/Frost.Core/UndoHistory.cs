@@ -9,7 +9,11 @@ public sealed record CreateOp(string Path, bool IsDirectory, Task<string?[]> Pri
 public sealed record TransferOp(bool Move, IReadOnlyList<TransferredItem> Items, Task<string?[]>? Prints = null) : UndoOp;
 public sealed record RecycleOp(IReadOnlyList<string> Paths) : UndoOp;
 /// <summary>0.4.0: an in-place edit of <paramref name="Path"/> (photo rotate, remove location); <paramref name="Backup"/> holds the original. Undo/redo swap them.</summary>
-public sealed record EditOp(string Path, string Backup, string Label) : UndoOp;
+public sealed record EditOp(string Path, string Backup, string Label) : UndoOp
+{
+    /// <summary>Fingerprint of what the file looks like right now if nobody else touches it (set by UndoHistory).</summary>
+    internal Task<string?[]>? Print { get; init; }
+}
 
 /// <param name="Message">What happened, or why it was refused.</param>
 /// <param name="CanOpenRecycleBin">The App should offer an "Open Recycle Bin" button (deletes can't be undone by Frost).</param>
@@ -92,7 +96,7 @@ public sealed class UndoHistory
     }
     /// <summary>Paths that went to the Recycle Bin. Frost can't restore them itself (see UndoAsync).</summary>
     /// <summary>0.4.0 contract: record an in-place edit; <paramref name="backup"/> comes from EditBackups.Create before editing. Implemented by the Core task.</summary>
-    public void RecordEdit(string path, string backup, string label) => throw new NotImplementedException();
+    public void RecordEdit(string path, string backup, string label) => Push(new EditOp(path, backup, label) { Print = PrintAsync(new[] { path }) });
 
     public void RecordRecycle(IEnumerable<string> paths)
     {
@@ -252,6 +256,20 @@ public sealed class UndoHistory
                 BatchRename.Apply(pairs.Select(p => new BatchRenameItem(p.From, Path.GetFileName(p.To), null)).ToList());
                 return new();
             }
+            case EditOp e:
+            {
+                string name = Path.GetFileName(e.Path);
+                if (!File.Exists(e.Path)) return Gone($"\"{name}\" was deleted, moved or renamed outside Frost.");
+                if (!File.Exists(e.Backup)) return Gone("the saved copy of the original is no longer there.");
+                if ((await ChangedAsync(new[] { e.Path }, e.Print))[0])
+                    return new($"\"{name}\" was changed after the edit, so Frost won't overwrite it.");
+                string tmp = e.Path + ".frost-swap-" + Guid.NewGuid().ToString("N")[..8];
+                File.Move(e.Path, tmp);
+                try { File.Move(e.Backup, e.Path); }
+                catch (Exception) { File.Move(tmp, e.Path); throw; } // put the file back; Go reports the error
+                File.Move(tmp, e.Backup);
+                return new(Done: new EditOp(e.Path, e.Backup, e.Label) { Print = Task.FromResult(new[] { ItemPrint.Of(e.Path) }) });
+            }
             case CreateOp c:
                 if (forward)
                 {
@@ -351,6 +369,7 @@ public sealed class UndoHistory
             BatchRenameOp b => $"rename of {b.Pairs.Count} items",
             CreateOp c => $"creation of \"{Path.GetFileName(c.Path)}\"",
             TransferOp t => $"{(t.Move ? "move" : "copy")} of {Items(t.Items.Select(i => Path.GetFileName(i.Destination)).ToArray())}",
+            EditOp e => $"{e.Label} of \"{Path.GetFileName(e.Path)}\"",
             RecycleOp d => $"delete of {Items(d.Paths.Select(Path.GetFileName).ToArray()!)}",
             _ => "operation",
         };
