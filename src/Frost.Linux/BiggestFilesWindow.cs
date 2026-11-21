@@ -43,11 +43,11 @@ public partial class MainWindow
         var template = new FuncDataTemplate<BigFile>((f, _) =>
         {
             if (f == null) return null;
-            var g = new Grid { ColumnDefinitions = new("2*,3*,80,110"), Background = Brushes.Transparent };
+            var g = new Grid { ColumnDefinitions = new("2*,3*,96,120"), Background = Brushes.Transparent };
             g.Children.Add(new TextBlock { Text = Path.GetFileName(f.Path), TextTrimming = TextTrimming.CharacterEllipsis });
             g.Children.Add(new TextBlock { Text = Path.GetDirectoryName(f.Path), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Dialogs.Res("Text3"), Margin = new Thickness(8, 0), [Grid.ColumnProperty] = 1 });
             g.Children.Add(new TextBlock { Text = Format.Size(f.Size), TextAlignment = TextAlignment.Right, Foreground = Dialogs.Res("Text2"), [Grid.ColumnProperty] = 2 });
-            g.Children.Add(new TextBlock { Text = Format.Date(f.Modified, DateTime.Now), TextAlignment = TextAlignment.Right, Foreground = Dialogs.Res("Text3"), [Grid.ColumnProperty] = 3 });
+            g.Children.Add(new TextBlock { Text = Format.Date(f.Modified, DateTime.Now), TextAlignment = TextAlignment.Right, Foreground = Dialogs.Res("Text3"), Margin = new Thickness(12, 0, 0, 0), [Grid.ColumnProperty] = 3 });
             return g;
         });
         static BigFile? FileAt(object? src) => (src as Visual)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault()?.DataContext as BigFile;
