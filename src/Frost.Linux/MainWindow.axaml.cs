@@ -484,6 +484,7 @@ public partial class MainWindow : Window
         yield return MI("What's using space?", () => ShowSpace(), "");
         yield return MI("Find biggest files", () => ShowBiggestFiles());
         yield return MI("Find duplicate files", () => ShowDuplicates());
+        yield return MI("Clean up empty folders", CleanEmptyFolders);
         yield return MI("Open terminal here", () => OpenTerminal(null));
         yield return new Separator();
         yield return MI("Copy path", CopyPath, "Ctrl+Shift+C");
@@ -512,6 +513,7 @@ public partial class MainWindow : Window
             yield return MI("Copy", () => CopySelection(false), "Ctrl+C");
             if (one is { IsDirectory: true }) yield return MI("Paste into folder", () => Paste(one.FullPath));
             yield return MI("Copy path", CopyPath, "Ctrl+Shift+C");
+            if (one is { IsDirectory: false }) yield return MI("Checksums…", ShowChecksums);
             yield return MI(one != null ? "Rename" : "Rename…", RenameSelection, "F2");
             yield return MI("Move to trash", () => DeleteSelection(false), "Del");
             yield return new Separator();

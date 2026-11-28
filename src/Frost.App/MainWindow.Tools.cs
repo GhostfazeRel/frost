@@ -13,6 +13,7 @@ public partial class MainWindow
         m.Items.Add(MI("What's using space?", null, ShowSpace));
         m.Items.Add(MI("Find biggest files", null, ShowBiggestFiles));
         m.Items.Add(MI("Find duplicate files", null, ShowDuplicates));
+        m.Items.Add(MI("Clean up empty folders", null, CleanEmptyFolders));
     }
 
     private void AddToolCommands(List<PaletteCommand> cmds)
@@ -28,6 +29,8 @@ public partial class MainWindow
         cmds.Add(new("What's using space?", "", ShowSpace));
         cmds.Add(new("Find biggest files", "", ShowBiggestFiles));
         cmds.Add(new("Find duplicate files", "", ShowDuplicates));
+        cmds.Add(new("Clean up empty folders", "", CleanEmptyFolders));
+        cmds.Add(new("Checksums of selected file", "", ShowChecksums));
     }
 
     // ---- Quick Look ----

@@ -28,6 +28,8 @@ public partial class MainWindow
             new("What's using space?", "", () => ShowSpace()),
             new("Find biggest files", "", () => ShowBiggestFiles()),
             new("Find duplicate files", "", () => ShowDuplicates()),
+            new("Clean up empty folders", "", CleanEmptyFolders),
+            new("Checksums of selected file", "", ShowChecksums),
             new(_split ? "Close split view" : "Split view", "Ctrl+\\", ToggleSplit),
             new("Quick Look", "Space", ShowQuickLook),
             new(_s.PreviewOnClick ? "Don't preview pictures on click" : "Preview pictures on click", "", TogglePreviewOnClick),

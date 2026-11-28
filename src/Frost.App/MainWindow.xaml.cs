@@ -611,6 +611,7 @@ public partial class MainWindow : Window
             m.Items.Add(MI("Copy", "", () => _vm.CopySelection(false), "Ctrl+C"));
             if (one is { IsDirectory: true }) m.Items.Add(MI("Paste into folder", "", () => _vm.Paste(one.FullPath), enabled: _vm.CanPaste()));
             m.Items.Add(MI("Copy path", "", _vm.CopyPath, "Ctrl+Shift+C"));
+            if (one is { IsDirectory: false }) m.Items.Add(MI("Checksums…", "", ShowChecksums));
             m.Items.Add(MI(one != null ? "Rename" : "Rename…", "", RenameSelection, "F2"));
             m.Items.Add(MI("Delete", "", () => _vm.Delete(false), "Del"));
             m.Items.Add(new Separator());
