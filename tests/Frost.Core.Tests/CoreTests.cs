@@ -361,3 +361,52 @@ public class FsTests : TempFixture
         { await foreach (var _ in Search.RunAsync(Root, "", true, cts.Token)) { } });
     }
 }
+
+public class UpdateDigestTests
+{
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("md5:abc", null)]
+    [InlineData("sha256:abc", null)]
+    [InlineData("sha256:zz00000000000000000000000000000000000000000000000000000000000000", null)]
+    [InlineData("sha256:00112233445566778899AABBCCDDEEFF00112233445566778899aabbccddeeff", "00112233445566778899AABBCCDDEEFF00112233445566778899aabbccddeeff")]
+    public void ParseSha256Digest(string? input, string? expected) => Assert.Equal(expected, UpdateVersion.ParseSha256Digest(input));
+}
+
+public class ChecksumAndEmptyFolderTests : IDisposable
+{
+    private readonly string _d = Directory.CreateTempSubdirectory("frost-ck").FullName;
+    public void Dispose() { try { Directory.Delete(_d, true); } catch { } }
+
+    [Fact]
+    public async Task KnownHashes()
+    {
+        var f = Path.Combine(_d, "a.txt"); File.WriteAllText(f, "abc");
+        var (md5, sha1, sha256) = await Checksums.ComputeAsync(f, null, CancellationToken.None);
+        Assert.Equal("900150983cd24fb0d6963f7d28e17f72", md5);
+        Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d", sha1);
+        Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", sha256);
+        Assert.True(Checksums.Matches(" BA7816BF 8F01CFEA:414140DE5DAE2223B00361A396177A9CB410FF61F20015AD\n", sha256));
+        Assert.False(Checksums.Matches("", sha256));
+    }
+
+    [Fact]
+    public void FindsOnlyTopMostEmptyFolders()
+    {
+        Directory.CreateDirectory(Path.Combine(_d, "e1", "e2"));            // empty chain: report e1 only
+        Directory.CreateDirectory(Path.Combine(_d, "full", "inner"));        // inner empty, full has a file
+        File.WriteAllText(Path.Combine(_d, "full", "x.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(_d, "deep", "a", "b"));       // b holds a file: nothing empty
+        File.WriteAllText(Path.Combine(_d, "deep", "a", "b", "y"), "y");
+        var found = EmptyFolders.Find(_d, CancellationToken.None).Select(p => Path.GetRelativePath(_d, p)).Order().ToList();
+        Assert.Equal(new[] { "e1", Path.Combine("full", "inner") }, found);
+    }
+
+    [Fact]
+    public void EmptyRootListsItsEmptyChildrenButNotItself()
+    {
+        Directory.CreateDirectory(Path.Combine(_d, "k"));
+        Assert.Equal(new[] { Path.Combine(_d, "k") }, EmptyFolders.Find(_d, CancellationToken.None));
+    }
+}

@@ -19,4 +19,12 @@ public static class UpdateVersion
     /// <summary>True if the tag is a newer MAJOR.MINOR.PATCH than <paramref name="current"/> (its revision is ignored).</summary>
     public static bool IsNewer(string? tag, Version current) =>
         Parse(tag) is { } v && v > new Version(current.Major, current.Minor, Math.Max(current.Build, 0));
+
+    /// <summary>The hex SHA-256 from a GitHub asset digest ("sha256:&lt;64 hex&gt;"); null if missing or malformed.</summary>
+    public static string? ParseSha256Digest(string? digest)
+    {
+        if (digest == null || !digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)) return null;
+        var hex = digest[7..];
+        return hex.Length == 64 && hex.All(Uri.IsHexDigit) ? hex : null;
+    }
 }

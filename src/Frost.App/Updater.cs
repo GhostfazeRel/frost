@@ -45,7 +45,8 @@ public static class Updater
                 if (!name.StartsWith("Frost-Setup-", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!a.TryGetProperty("browser_download_url", out var u) || u.GetString() is not { } url || !IsGitHubUrl(url)) continue;
                 var digest = a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null;
-                var sha = digest != null && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? digest[7..] : null;
+                var sha = UpdateVersion.ParseSha256Digest(digest);
+                if (sha == null) continue; // never run an installer we cannot verify
                 var body = r.TryGetProperty("body", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString() ?? "" : "";
                 best = new UpdateInfo(tag!, v, body, url, sha);
                 break;
