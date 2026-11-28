@@ -11,7 +11,7 @@ public partial class MainWindow
         var sel = _vm.ActiveTab?.Selection.Select(i => i.FullPath).ToList() ?? new List<string>();
         if (sel.Count != 1 || !File.Exists(sel[0])) return;
         var path = sel[0];
-        (string Md5, string Sha1, string Sha256) h = default;
+        (string Md5, string Sha1, string Sha256) h = ("", "", "");
         var err = DialogWindow.RunWithProgress(this, "Checksums", "Reading " + Path.GetFileName(path) + "…", async (p, ct) => h = await Frost.Core.Checksums.ComputeAsync(path, p, ct));
         if (err is OperationCanceledException) return;
         if (err != null) { _vm.Notify("Couldn't read the file: " + err.Message); return; }
